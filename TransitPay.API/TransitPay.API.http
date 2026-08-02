@@ -1,0 +1,6 @@
+@TransitPay.API_HostAddress = http://localhost:5132
+
+GET {{TransitPay.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
