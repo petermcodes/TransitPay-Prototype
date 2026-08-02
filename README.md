@@ -1,11 +1,11 @@
 # TransitPay-Prototype
-A prototype Android transit payment system built with Kotlin, ASP.NET Core, PostgreSQL, and React.
+A prototype Android transit payment system built with ASP.NET Core, PostgreSQL, and React.
 
 A portfolio project demonstrating a modern transit fare payment system.
 
 ## Technologies
 
-- Kotlin + Jetpack Compose
+- Jetpack Compose
 - ASP.NET Core Web API
 - PostgreSQL
 - React
