@@ -1,0 +1,27 @@
+$kind: http-request
+name: Get Card
+method: GET
+url: '{{baseUrl}}/api/cards/{{cardNumber}}'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response has card details", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("cardId");
+          pm.expect(json).to.have.property("cardNumber");
+          pm.expect(json).to.have.property("status");
+      });
+      pm.test("Card number matches request", function () {
+          const json = pm.response.json();
+          pm.expect(json.cardNumber).to.equal(pm.globals.get("cardNumber"));
+      });

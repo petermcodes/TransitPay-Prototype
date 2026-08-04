@@ -1,0 +1,46 @@
+name: TransitPay Local
+values:
+  - key: baseUrl
+    value: 'http://localhost:5132'
+    type: default
+    enabled: true
+  - key: authToken
+    value: ''
+    type: secret
+    enabled: true
+  - key: refreshToken
+    value: ''
+    type: secret
+    enabled: true
+  - key: userId
+    value: ''
+    type: default
+    enabled: true
+  - key: cardId
+    value: ''
+    type: default
+    enabled: true
+  - key: cardNumber
+    value: ''
+    type: default
+    enabled: true
+  - key: walletId
+    value: ''
+    type: default
+    enabled: true
+  - key: stationId
+    value: ''
+    type: default
+    enabled: true
+  - key: townId
+    value: ''
+    type: default
+    enabled: true
+  - key: qrData
+    value: ''
+    type: default
+    enabled: true
+  - key: qrSignature
+    value: ''
+    type: default
+    enabled: true

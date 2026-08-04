@@ -1,0 +1,22 @@
+$kind: http-request
+name: Preview Fare
+method: GET
+url: '{{baseUrl}}/api/payment/fare/{{cardId}}/{{stationId}}'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response has fare amount", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("fareAmount");
+          pm.expect(json.fareAmount).to.be.a("number").and.above(0);
+      });

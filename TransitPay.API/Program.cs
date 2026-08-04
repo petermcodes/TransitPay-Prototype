@@ -1,22 +1,31 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TransitPay.API.Data;
+using TransitPay.API.Enums;
 using TransitPay.API.Interfaces;
 using TransitPay.API.Models;
 using TransitPay.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Resolve secrets from environment variables with development fallbacks
-var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "Akosipm123!";
-var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? "TransitPayPrototypeDevelopmentSecretKey123456";
+// Resolve secrets from environment variables ONLY — no hardcoded fallbacks.
+// Fail fast at startup if required secrets are missing.
+var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD")
+    ?? throw new InvalidOperationException(
+        "DB_PASSWORD environment variable is not set. " +
+        "Set it before starting the application (e.g., set DB_PASSWORD=your-db-password).");
 
 // Add services
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+    };
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -38,19 +47,26 @@ builder.Services.AddCors(options =>
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?.Replace("${DB_PASSWORD}", dbPassword)
-    ?? $"Host=localhost;Port=5432;Database=TransitPayDB;Username=postgres;Password={dbPassword}";
+    ?? throw new InvalidOperationException(
+        "Connection string 'DefaultConnection' is not configured in appsettings.json.");
 
 builder.Services.AddDbContext<TransitPayDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+// Register services
 builder.Services.AddScoped<PasswordHasher<User>>();
+builder.Services.AddScoped<ISecurityKeyProvider, SecurityKeyProvider>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IQRService, QRService>();
+builder.Services.AddScoped<IPaymentSessionService, PaymentSessionService>();
+builder.Services.AddScoped<TransactionReferenceNumberGenerator>();
+builder.Services.AddScoped<ITripService, TripService>();
+builder.Services.AddScoped<IDiscountService, DiscountService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var signingKeyBytes = SHA256.HashData(Encoding.UTF8.GetBytes(jwtKey));
-
+// JWT authentication using the centralized security key provider
+// This ensures JWT signing and QR signing use the exact same key source.
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -60,9 +76,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"] ?? "TransitPay.API",
-            ValidAudience = jwtSection["Audience"] ?? "TransitPay.Client",
-            IssuerSigningKey = new SymmetricSecurityKey(signingKeyBytes)
+            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "TransitPay.API",
+            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "TransitPay.Client",
+            IssuerSigningKey = new SymmetricSecurityKey(
+                System.Text.Encoding.UTF8.GetBytes(
+                    Environment.GetEnvironmentVariable("JWT_KEY")
+                    ?? throw new InvalidOperationException(
+                        "JWT_KEY environment variable is not set. " +
+                        "Set it before starting the application (e.g., set JWT_KEY=your-secret-key-at-least-32-chars).")))
         };
     });
 
@@ -89,15 +110,17 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<TransitPayDbContext>();
     db.Database.Migrate();
 
+    // Seed roles
     if (!db.Roles.Any())
     {
         db.Roles.AddRange(
-            new Role { RoleName = "Passenger" },
-            new Role { RoleName = "Driver" },
-            new Role { RoleName = "Admin" });
+            new Role { RoleName = RoleName.Passenger },
+            new Role { RoleName = RoleName.Driver },
+            new Role { RoleName = RoleName.Admin });
         db.SaveChanges();
     }
 
+    // Seed towns and stations
     if (!db.Towns.Any())
     {
         var town = new Town { TownName = "Lagos", IsActive = true, CreatedAt = DateTime.UtcNow };
@@ -109,21 +132,35 @@ using (var scope = app.Services.CreateScope())
         db.Stations.AddRange(origin, destination);
         db.SaveChanges();
 
-        db.FareRules.Add(new FareRule
-        {
-            OriginStationId = origin.StationId,
-            DestinationStationId = destination.StationId,
-            VehicleType = "BUS",
-            PassengerType = "Passenger",
-            FareAmount = 12.50m,
-            EffectiveDate = DateTime.UtcNow.AddDays(-1),
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        });
+        // Seed fare rules for both directions
+        db.FareRules.AddRange(
+            new FareRule
+            {
+                OriginStationId = origin.StationId,
+                DestinationStationId = destination.StationId,
+                VehicleType = VehicleType.BUS,
+                PassengerType = PassengerType.Passenger,
+                FareAmount = 12.50m,
+                EffectiveDate = DateTime.UtcNow.AddDays(-1),
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new FareRule
+            {
+                OriginStationId = destination.StationId,
+                DestinationStationId = origin.StationId,
+                VehicleType = VehicleType.BUS,
+                PassengerType = PassengerType.Passenger,
+                FareAmount = 12.50m,
+                EffectiveDate = DateTime.UtcNow.AddDays(-1),
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            });
         db.SaveChanges();
     }
 
-    var adminRole = db.Roles.FirstOrDefault(r => r.RoleName == "Admin");
+    // Seed admin user
+    var adminRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Admin);
     if (adminRole != null && !db.Users.Any(u => u.Username == "Admin"))
     {
         var passwordHasher = scope.ServiceProvider.GetRequiredService<PasswordHasher<User>>();
@@ -142,12 +179,14 @@ using (var scope = app.Services.CreateScope())
         db.SaveChanges();
     }
 
+    // Seed test card and wallet
     if (!db.Cards.Any())
     {
         var card = new Card
         {
             CardNumber = "4111111111111111",
-            Status = "ACTIVE",
+            Status = CardStatus.ACTIVE,
+            PassengerType = PassengerType.Passenger,
             IssueDate = DateTime.UtcNow,
             ExpiryDate = DateTime.UtcNow.AddYears(2),
             CreatedAt = DateTime.UtcNow
@@ -159,12 +198,13 @@ using (var scope = app.Services.CreateScope())
         {
             CardId = card.CardId,
             Balance = 50.00m,
-            Status = "ACTIVE",
+            Status = CardStatus.ACTIVE,
             CreatedAt = DateTime.UtcNow
         });
         db.SaveChanges();
     }
 
+    // Auto-create wallets for cards without wallets
     var cardsWithoutWallets = db.Cards.Where(c => !db.Wallets.Any(w => w.CardId == c.CardId)).ToList();
     if (cardsWithoutWallets.Any())
     {
@@ -174,11 +214,30 @@ using (var scope = app.Services.CreateScope())
             {
                 CardId = card.CardId,
                 Balance = 50.00m,
-                Status = "ACTIVE",
+                Status = CardStatus.ACTIVE,
                 CreatedAt = DateTime.UtcNow
             });
         }
         db.SaveChanges();
+    }
+
+    // Auto-generate QR codes for all cards that don't have one
+    var cardsWithoutQR = db.Cards.Where(c => !db.QRCodes.Any(q => q.CardId == c.CardId && q.IsActive)).ToList();
+    if (cardsWithoutQR.Any())
+    {
+        var qrService = scope.ServiceProvider.GetRequiredService<IQRService>();
+        foreach (var card in cardsWithoutQR)
+        {
+            try
+            {
+                await qrService.GenerateOrRetrieveQRAsync(card.CardId);
+            }
+            catch (Exception ex)
+            {
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                logger.LogWarning(ex, "Failed to generate QR for card {CardId}", card.CardId);
+            }
+        }
     }
 }
 
@@ -188,6 +247,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 app.UseCors("FrontendApps");

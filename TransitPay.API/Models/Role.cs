@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using TransitPay.API.Enums;
 
 namespace TransitPay.API.Models;
 
@@ -11,7 +12,7 @@ public class Role
     public int RoleId { get; set; }
 
     [Column("role_name")]
-    public string RoleName { get; set; } = string.Empty;
+    public RoleName RoleName { get; set; }
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

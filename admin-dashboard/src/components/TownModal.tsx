@@ -1,0 +1,83 @@
+import { useState, useEffect } from 'react'
+import { Modal } from './Modal'
+import { Spinner } from './Spinner'
+
+interface TownModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSubmit: (data: { townName: string }) => Promise<void>
+  loading?: boolean
+}
+
+export function TownModal({ isOpen, onClose, onSubmit, loading = false }: TownModalProps) {
+  const [townName, setTownName] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (isOpen) {
+      setTownName('')
+      setError('')
+    }
+  }, [isOpen])
+
+  const validate = (): boolean => {
+    if (!townName.trim()) {
+      setError('Town name is required')
+      return false
+    }
+    setError('')
+    return true
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!validate()) return
+
+    try {
+      await onSubmit({ townName })
+      onClose()
+    } catch (error) {
+      // Error handling is done in parent
+    }
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Add New Town" size="sm">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            Town Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={townName}
+            onChange={e => setTownName(e.target.value)}
+            placeholder="Enter town name"
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+          />
+          {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+        </div>
+
+        <div className="flex gap-3 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-blue-gradient text-white font-semibold hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {loading && <Spinner size="sm" />}
+            {loading ? 'Adding...' : 'Add Town'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}

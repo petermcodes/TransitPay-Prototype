@@ -1,0 +1,35 @@
+$kind: http-request
+name: Get Summary Report
+method: GET
+url: '{{baseUrl}}/api/admin/reports/summary'
+order: 10000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response has all summary fields", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("totalUsers");
+          pm.expect(json).to.have.property("totalDrivers");
+          pm.expect(json).to.have.property("totalStations");
+          pm.expect(json).to.have.property("totalTowns");
+          pm.expect(json).to.have.property("totalTransactions");
+          pm.expect(json).to.have.property("totalRevenue");
+      });
+      pm.test("All counts are non-negative numbers", function () {
+          const json = pm.response.json();
+          pm.expect(json.totalUsers).to.be.a("number").and.at.least(0);
+          pm.expect(json.totalDrivers).to.be.a("number").and.at.least(0);
+          pm.expect(json.totalStations).to.be.a("number").and.at.least(0);
+          pm.expect(json.totalTowns).to.be.a("number").and.at.least(0);
+          pm.expect(json.totalTransactions).to.be.a("number").and.at.least(0);
+          pm.expect(json.totalRevenue).to.be.a("number").and.at.least(0);
+      });

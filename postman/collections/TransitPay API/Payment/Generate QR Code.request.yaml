@@ -1,0 +1,40 @@
+$kind: http-request
+name: Generate QR Code
+method: POST
+url: '{{baseUrl}}/api/payment/qr'
+order: 3000
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "cardId": "{{cardId}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response has QR data and signature", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("qrData");
+          pm.expect(json).to.have.property("signature");
+      });
+      pm.test("QR data is a non-empty string", function () {
+          const json = pm.response.json();
+          pm.expect(json.qrData).to.be.a("string").and.not.empty;
+      });
+      if (pm.response.code === 200) {
+          const json = pm.response.json();
+          pm.globals.set("qrData", json.qrData);
+          pm.globals.set("qrSignature", json.signature);
+      }

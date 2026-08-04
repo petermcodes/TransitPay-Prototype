@@ -1,20 +1,36 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users, Bus, MapPin, Map,
   Grid3X3, CreditCard, BarChart3, Settings,
   Search, Plus, Edit2, Trash2, CheckCircle,
   XCircle, AlertCircle, TrendingUp, TrendingDown,
   DollarSign, ArrowDownLeft,
-  Bell, LogOut, Menu, X, Eye, Download
+  Bell, LogOut, Menu, X, Eye, Download, RefreshCw,
+  Tag, FileText, Activity
 } from 'lucide-react'
+import { adminService } from './lib/admin'
+import { authService } from './lib/auth'
+import { ToastContainer, useToast } from './components/Toast'
+import { StationModal } from './components/StationModal'
+import { DriverModal } from './components/DriverModal'
+import { TownModal } from './components/TownModal'
+import { FareRuleModal } from './components/FareRuleModal'
+import { TripModal } from './components/TripModal'
+import { DiscountTypeModal } from './components/DiscountTypeModal'
+import { TripsView } from './views/TripsView'
+import { DiscountTypesView } from './views/DiscountTypesView'
+import { DiscountApplicationsView } from './views/DiscountApplicationsView'
+import { TripMonitoringView } from './views/TripMonitoringView'
+import type { Town, Station } from './lib/admin'
 
 type AdminSection =
   | 'dashboard' | 'users' | 'drivers' | 'stations' | 'towns'
   | 'fare-matrix' | 'transactions' | 'reports' | 'settings'
+  | 'trips' | 'discount-types' | 'discount-applications' | 'trip-monitoring'
 
 // ── Shared ─────────────────────────────────────────────────────────────────────
 
-function Chip({ label, variant = 'default' }: { label: string; variant?: 'success' | 'warning' | 'danger' | 'info' | 'default' }) {
+export function Chip({ label, variant = 'default' }: { label: string; variant?: 'success' | 'warning' | 'danger' | 'info' | 'default' }) {
   const map = {
     success: 'bg-green-50 text-green-700 border border-green-200',
     warning: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
@@ -25,9 +41,9 @@ function Chip({ label, variant = 'default' }: { label: string; variant?: 'succes
   return <span className={`chip ${map[variant]}`}>{label}</span>
 }
 
-function Btn({ children, variant = 'primary', size = 'md', onClick, className = '' }: {
+export function Btn({ children, variant = 'primary', size = 'md', onClick, disabled, className = '' }: {
   children: React.ReactNode; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
-  size?: 'sm' | 'md' | 'lg'; onClick?: () => void; className?: string
+  size?: 'sm' | 'md' | 'lg'; onClick?: () => void; disabled?: boolean; className?: string
 }) {
   const sizes = { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm', lg: 'px-5 py-2.5 text-sm' }
   const variants = {
@@ -37,8 +53,8 @@ function Btn({ children, variant = 'primary', size = 'md', onClick, className = 
     danger: 'bg-red-500 text-white hover:bg-red-600',
   }
   return (
-    <button onClick={onClick}
-      className={`inline-flex items-center gap-1.5 font-semibold rounded-xl transition-all font-poppins ${sizes[size]} ${variants[variant]} ${className}`}>
+    <button onClick={onClick} disabled={disabled}
+      className={`inline-flex items-center gap-1.5 font-semibold rounded-xl transition-all font-poppins ${sizes[size]} ${variants[variant]} ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
       {children}
     </button>
   )
@@ -84,10 +100,14 @@ const navItems: { id: AdminSection; label: string; icon: React.ElementType; badg
   { id: 'transactions', label: 'Transactions', icon: CreditCard },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'trips', label: 'Trips', icon: Bus },
+  { id: 'discount-types', label: 'Discount Types', icon: Tag },
+  { id: 'discount-applications', label: 'Discount Apps', icon: FileText, badge: 3 },
+  { id: 'trip-monitoring', label: 'Trip Monitor', icon: Activity },
 ]
 
-function Sidebar({ active, setActive, open, setOpen }: {
-  active: AdminSection; setActive: (s: AdminSection) => void; open: boolean; setOpen: (v: boolean) => void
+function Sidebar({ active, setActive, open, setOpen, onLogout }: {
+  active: AdminSection; setActive: (s: AdminSection) => void; open: boolean; setOpen: (v: boolean) => void; onLogout: () => void
 }) {
   return (
     <>
@@ -147,7 +167,7 @@ function Sidebar({ active, setActive, open, setOpen }: {
               <p className="text-sm font-semibold text-slate-800">Admin User</p>
               <p className="text-xs text-slate-400 truncate">admin@transitpay.ph</p>
             </div>
-            <button className="text-slate-400 hover:text-red-500 transition-colors"><LogOut size={16} /></button>
+            <button onClick={onLogout} className="text-slate-400 hover:text-red-500 transition-colors"><LogOut size={16} /></button>
           </div>
         </div>
       </aside>
@@ -409,7 +429,7 @@ const drivers = [
   { id: 'DRV-005', name: 'Leo Villanueva', mobile: '09275555555', vehicle: 'N/A', plate: 'N/A', trips: 0, earnings: '₱0', status: 'pending', approval: 'pending' },
 ]
 
-function DriversView() {
+function DriversView({ onAddDriver }: { onAddDriver: () => void }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Pending section */}
@@ -429,8 +449,8 @@ function DriversView() {
                 <p className="text-xs text-slate-400">{d.mobile}</p>
               </div>
               <div className="flex gap-2">
-                <Btn variant="primary" size="sm"><CheckCircle size={13} /> Approve</Btn>
-                <Btn variant="danger" size="sm"><XCircle size={13} /> Reject</Btn>
+                <Btn variant="primary" size="sm" onClick={() => {}}><CheckCircle size={13} /> Approve</Btn>
+                <Btn variant="danger" size="sm" onClick={() => {}}><XCircle size={13} /> Reject</Btn>
               </div>
             </div>
           ))}
@@ -446,7 +466,7 @@ function DriversView() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input placeholder="Search drivers..." className="pl-9 pr-4 py-1.5 text-sm rounded-xl border border-slate-200 w-40 focus:outline-none focus:border-blue-400" />
             </div>
-            <Btn variant="primary" size="sm"><Plus size={13} /> Add Driver</Btn>
+            <Btn variant="primary" size="sm" onClick={onAddDriver}><Plus size={13} /> Add Driver</Btn>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -502,12 +522,12 @@ const towns = [
   { id: 'TWN-06', name: 'Parañaque', stations: 3, status: 'inactive' },
 ]
 
-function TownsView() {
+function TownsView({ onAddTown }: { onAddTown: () => void }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-between items-center">
         <div />
-        <Btn variant="primary"><Plus size={14} /> Add Town</Btn>
+        <Btn variant="primary" onClick={onAddTown}><Plus size={14} /> Add Town</Btn>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {towns.map(t => (
@@ -531,15 +551,15 @@ function TownsView() {
   )
 }
 
-function StationsView() {
-  const stations = [
+function StationsView({ onAddStation }: { onAddStation: () => void }) {
+  const [stations] = useState([
     { id: 'STN-01', name: 'Cubao Station', town: 'Quezon City', status: 'active' },
     { id: 'STN-02', name: 'Commonwealth', town: 'Quezon City', status: 'active' },
     { id: 'STN-03', name: 'Fairview Terminal', town: 'Quezon City', status: 'active' },
     { id: 'STN-04', name: 'Marikina Station', town: 'Marikina', status: 'active' },
     { id: 'STN-05', name: 'Ortigas Station', town: 'Pasig', status: 'active' },
     { id: 'STN-06', name: 'Shaw Station', town: 'Pasig', status: 'inactive' },
-  ]
+  ])
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-between items-center">
@@ -547,7 +567,7 @@ function StationsView() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input placeholder="Search stations..." className="pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 w-48 focus:outline-none focus:border-blue-400" />
         </div>
-        <Btn variant="primary"><Plus size={14} /> Add Station</Btn>
+        <Btn variant="primary" onClick={onAddStation}><Plus size={14} /> Add Station</Btn>
       </div>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <table className="w-full text-sm">
@@ -588,11 +608,11 @@ const fares = [
   { id: 'FM-05', origin: 'Lawton Station', dest: 'Shaw Station', vehicle: 'Bus', type: 'PWD', amount: 11, effective: 'Jan 1, 2026', status: 'active' },
 ]
 
-function FareMatrixView() {
+function FareMatrixView({ onAddFareRule }: { onAddFareRule: () => void }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Btn variant="primary"><Plus size={14} /> Add Fare Rule</Btn>
+        <Btn variant="primary" onClick={onAddFareRule}><Plus size={14} /> Add Fare Rule</Btn>
       </div>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -644,10 +664,12 @@ const allTx = [
 function TransactionsView() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [search, setSearch] = useState('')
 
   const filtered = allTx.filter(t =>
     (typeFilter === 'all' || t.type.toLowerCase() === typeFilter) &&
-    (statusFilter === 'all' || t.status === statusFilter)
+    (statusFilter === 'all' || t.status === statusFilter) &&
+    (search === '' || t.id.toLowerCase().includes(search.toLowerCase()) || t.passenger.toLowerCase().includes(search.toLowerCase()))
   )
 
   return (
@@ -675,7 +697,7 @@ function TransactionsView() {
         </div>
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input placeholder="Search..." className="pl-9 pr-4 py-1.5 text-sm rounded-xl border border-slate-200 w-40 focus:outline-none focus:border-blue-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by TRN or passenger..." className="pl-9 pr-4 py-1.5 text-sm rounded-xl border border-slate-200 w-56 focus:outline-none focus:border-blue-400" />
         </div>
       </div>
 
@@ -820,10 +842,190 @@ function SettingsView() {
 export default function AdminApp() {
   const [section, setSection] = useState<AdminSection>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated())
+  const [loginMobile, setLoginMobile] = useState('')
+  const [loginPass, setLoginPass] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
+
+  // Modal states
+  const [isStationModalOpen, setIsStationModalOpen] = useState(false)
+  const [isDriverModalOpen, setIsDriverModalOpen] = useState(false)
+  const [isTownModalOpen, setIsTownModalOpen] = useState(false)
+  const [isFareRuleModalOpen, setIsFareRuleModalOpen] = useState(false)
+  const [isTripModalOpen, setIsTripModalOpen] = useState(false)
+  const [isDiscountTypeModalOpen, setIsDiscountTypeModalOpen] = useState(false)
+
+  // Loading states
+  const [stationLoading, setStationLoading] = useState(false)
+  const [driverLoading, setDriverLoading] = useState(false)
+  const [townLoading, setTownLoading] = useState(false)
+  const [fareRuleLoading, setFareRuleLoading] = useState(false)
+
+  // Data states
+  const [towns, setTowns] = useState<Town[]>([])
+  const [stations, setStations] = useState<Station[]>([])
+
+  // Toast notifications
+  const { toasts, removeToast, success, error: showError } = useToast()
+
+  const handleLogin = async () => {
+    setLoginLoading(true)
+    setLoginError('')
+    try {
+      await authService.login({ mobileNumber: loginMobile, password: loginPass })
+      setIsAuthenticated(true)
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : 'Login failed')
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
+  const handleLogout = () => {
+    authService.logout()
+    setIsAuthenticated(false)
+  }
+
+  // Load initial data
+  useEffect(() => {
+    if (!isAuthenticated) return
+    loadTowns()
+    loadStations()
+  }, [isAuthenticated])
+
+  const loadTowns = async () => {
+    try {
+      const data = await adminService.getTowns()
+      setTowns(data)
+    } catch (err) {
+      console.error('Failed to load towns:', err)
+    }
+  }
+
+  const loadStations = async () => {
+    try {
+      const data = await adminService.getStations()
+      setStations(data)
+    } catch (err) {
+      console.error('Failed to load stations:', err)
+    }
+  }
+
+  // Handlers
+  const handleAddStation = async (data: { townId: number; stationName: string }) => {
+    setStationLoading(true)
+    try {
+      await adminService.createStation(data)
+      success('Station added successfully!')
+      await loadStations()
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to add station')
+    } finally {
+      setStationLoading(false)
+    }
+  }
+
+  const handleAddDriver = async (data: {
+    firstName: string
+    lastName: string
+    mobileNumber: string
+    vehicle: string
+    plateNumber: string
+  }) => {
+    setDriverLoading(true)
+    try {
+      await adminService.createDriver({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        mobileNumber: data.mobileNumber,
+        password: 'Driver123!' // Default password for testing
+      })
+      success('Driver added successfully! Default password: Driver123!')
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to add driver')
+    } finally {
+      setDriverLoading(false)
+    }
+  }
+
+  const handleAddTown = async (data: { townName: string }) => {
+    setTownLoading(true)
+    try {
+      await adminService.createTown(data)
+      success('Town added successfully!')
+      await loadTowns()
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to add town')
+    } finally {
+      setTownLoading(false)
+    }
+  }
+
+  const handleAddFareRule = async (data: {
+    originStationId: number
+    destinationStationId: number
+    vehicleType: string
+    passengerType: string
+    fareAmount: number
+    effectiveDate: string
+  }) => {
+    setFareRuleLoading(true)
+    try {
+      await adminService.createFareRule(data)
+      success('Fare rule added successfully!')
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to add fare rule')
+    } finally {
+      setFareRuleLoading(false)
+    }
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#F0F4FF] p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+          <div className="bg-blue-gradient px-6 py-10 text-center relative overflow-hidden">
+            <div className="absolute top-[-40px] right-[-40px] w-40 h-40 rounded-full bg-white/10" />
+            <div className="absolute bottom-[-40px] left-[-40px] w-40 h-40 rounded-full bg-white/10" />
+            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <Bus size={32} className="text-white" />
+            </div>
+            <h1 className="font-poppins text-2xl font-bold text-white">TransitPay Admin</h1>
+            <p className="text-blue-100 text-sm mt-1">Sign in to manage the system</p>
+          </div>
+          <div className="p-6 flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mobile Number</label>
+              <input value={loginMobile} onChange={e => setLoginMobile(e.target.value)} placeholder="09171234567"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-400" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Password</label>
+              <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="Enter password"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-400" />
+            </div>
+            {loginError && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-3 flex items-start gap-2">
+                <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-600">{loginError}</p>
+              </div>
+            )}
+            <Btn variant="primary" size="lg" onClick={handleLogin} disabled={loginLoading}>
+              {loginLoading ? <><RefreshCw size={16} className="animate-spin" /> Signing in...</> : 'Sign In'}
+            </Btn>
+            <p className="text-center text-xs text-slate-400">
+              Default admin: mobile <span className="font-mono font-semibold">0000000000</span> / password <span className="font-mono font-semibold">Admin</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full bg-[#F0F4FF] overflow-hidden">
-      <Sidebar active={section} setActive={setSection} open={sidebarOpen} setOpen={setSidebarOpen} />
+      <Sidebar active={section} setActive={setSection} open={sidebarOpen} setOpen={setSidebarOpen} onLogout={handleLogout} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Topbar section={section} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
@@ -831,15 +1033,73 @@ export default function AdminApp() {
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {section === 'dashboard' && <DashboardView />}
           {section === 'users' && <UsersView />}
-          {section === 'drivers' && <DriversView />}
-          {section === 'stations' && <StationsView />}
-          {section === 'towns' && <TownsView />}
-          {section === 'fare-matrix' && <FareMatrixView />}
+          {section === 'drivers' && <DriversView onAddDriver={() => setIsDriverModalOpen(true)} />}
+          {section === 'stations' && <StationsView onAddStation={() => setIsStationModalOpen(true)} />}
+          {section === 'towns' && <TownsView onAddTown={() => setIsTownModalOpen(true)} />}
+          {section === 'fare-matrix' && <FareMatrixView onAddFareRule={() => setIsFareRuleModalOpen(true)} />}
           {section === 'transactions' && <TransactionsView />}
           {section === 'reports' && <ReportsView />}
           {section === 'settings' && <SettingsView />}
+          {section === 'trips' && <TripsView onAddTrip={() => {}} />}
+          {section === 'discount-types' && <DiscountTypesView onAddDiscountType={() => {}} />}
+          {section === 'discount-applications' && <DiscountApplicationsView />}
+          {section === 'trip-monitoring' && <TripMonitoringView />}
         </main>
       </div>
+
+      {/* Modals */}
+      <StationModal
+        isOpen={isStationModalOpen}
+        onClose={() => setIsStationModalOpen(false)}
+        onSubmit={handleAddStation}
+        towns={towns}
+        loading={stationLoading}
+      />
+
+      <DriverModal
+        isOpen={isDriverModalOpen}
+        onClose={() => setIsDriverModalOpen(false)}
+        onSubmit={handleAddDriver}
+        loading={driverLoading}
+      />
+
+      <TownModal
+        isOpen={isTownModalOpen}
+        onClose={() => setIsTownModalOpen(false)}
+        onSubmit={handleAddTown}
+        loading={townLoading}
+      />
+
+      <FareRuleModal
+        isOpen={isFareRuleModalOpen}
+        onClose={() => setIsFareRuleModalOpen(false)}
+        onSubmit={handleAddFareRule}
+        stations={stations}
+        loading={fareRuleLoading}
+      />
+
+      <TripModal
+        isOpen={isTripModalOpen}
+        onClose={() => setIsTripModalOpen(false)}
+        onSubmit={async (data) => {
+          // TODO: Implement trip creation via API
+          alert('Trip creation would be implemented here')
+          setIsTripModalOpen(false)
+        }}
+      />
+
+      <DiscountTypeModal
+        isOpen={isDiscountTypeModalOpen}
+        onClose={() => setIsDiscountTypeModalOpen(false)}
+        onSubmit={async (data) => {
+          // TODO: Implement discount type creation via API
+          alert('Discount type would be created here')
+          setIsDiscountTypeModalOpen(false)
+        }}
+      />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }

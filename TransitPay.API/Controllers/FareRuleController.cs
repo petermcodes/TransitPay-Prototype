@@ -1,7 +1,9 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Data;
+using TransitPay.API.Enums;
 using TransitPay.API.Models;
 
 namespace TransitPay.API.Controllers;
@@ -41,10 +43,46 @@ public class FareRuleController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateFareRule([FromBody] FareRule fareRule)
+    public async Task<IActionResult> CreateFareRule([FromBody] FareRuleCreateRequest request)
     {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+        }
+
+        var fareRule = new FareRule
+        {
+            OriginStationId = request.OriginStationId,
+            DestinationStationId = request.DestinationStationId,
+            VehicleType = Enum.Parse<VehicleType>(request.VehicleType),
+            PassengerType = Enum.Parse<PassengerType>(request.PassengerType),
+            FareAmount = request.FareAmount,
+            EffectiveDate = request.EffectiveDate,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
         _dbContext.FareRules.Add(fareRule);
         await _dbContext.SaveChangesAsync();
         return Ok(new { success = true, message = "Fare rule created successfully.", data = fareRule });
     }
+}
+
+public class FareRuleCreateRequest
+{
+    [Required(ErrorMessage = "Origin station ID is required.")]
+    public int OriginStationId { get; set; }
+
+    [Required(ErrorMessage = "Destination station ID is required.")]
+    public int DestinationStationId { get; set; }
+
+    [Required(ErrorMessage = "Vehicle type is required.")]
+    public string VehicleType { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Passenger type is required.")]
+    public string PassengerType { get; set; } = string.Empty;
+
+    [Range(0.01, 10000, ErrorMessage = "Fare amount must be greater than 0.")]
+    public decimal FareAmount { get; set; }
+
+    public DateTime EffectiveDate { get; set; } = DateTime.UtcNow;
 }

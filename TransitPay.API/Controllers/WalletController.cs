@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Data;
+using TransitPay.API.Enums;
 
 namespace TransitPay.API.Controllers;
 
@@ -51,7 +52,7 @@ public class WalletController : ControllerBase
         {
             CardId = request.CardId,
             Amount = request.Amount,
-            TransactionType = "TOP_UP",
+            TransactionType = TransactionType.TOP_UP,
             TransactionName = "Admin top-up",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow

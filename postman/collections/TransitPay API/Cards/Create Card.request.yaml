@@ -1,0 +1,40 @@
+$kind: http-request
+name: Create Card
+method: POST
+url: '{{baseUrl}}/api/cards'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "cardNumber": "1234567890123456"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200 or 201", function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+      pm.test("Response has card data", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("cardId");
+          pm.expect(json).to.have.property("cardNumber");
+      });
+      pm.test("Card number is 16 digits", function () {
+          const json = pm.response.json();
+          pm.expect(json.cardNumber).to.match(/^\d{16}$/);
+      });
+      if (pm.response.code === 200 || pm.response.code === 201) {
+          const json = pm.response.json();
+          pm.globals.set("cardId", json.cardId);
+          pm.globals.set("cardNumber", json.cardNumber);
+      }

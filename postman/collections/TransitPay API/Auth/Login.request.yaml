@@ -1,0 +1,42 @@
+$kind: http-request
+name: Login
+method: POST
+url: '{{baseUrl}}/api/auth/login'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "mobileNumber": "09171234567",
+      "password": "Test@1234"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response contains access token", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("accessToken");
+          pm.expect(json.accessToken).to.be.a("string").and.not.empty;
+      });
+      pm.test("Response contains refresh token", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("refreshToken");
+      });
+      pm.test("Response contains userId", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("userId");
+      });
+      // Save tokens for subsequent requests
+      if (pm.response.code === 200) {
+          const json = pm.response.json();
+          pm.globals.set("authToken", json.accessToken);
+          pm.globals.set("refreshToken", json.refreshToken);
+          pm.globals.set("userId", json.userId);
+      }

@@ -1,0 +1,41 @@
+$kind: http-request
+name: Process Fare Payment
+method: POST
+url: '{{baseUrl}}/api/payment/fare'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "cardId": "{{cardId}}",
+      "stationId": "{{stationId}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response has transaction details", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("transactionId");
+          pm.expect(json).to.have.property("fareAmount");
+          pm.expect(json).to.have.property("remainingBalance");
+      });
+      pm.test("Fare amount is positive", function () {
+          const json = pm.response.json();
+          pm.expect(json.fareAmount).to.be.above(0);
+      });
+      pm.test("Remaining balance is non-negative", function () {
+          const json = pm.response.json();
+          pm.expect(json.remainingBalance).to.be.at.least(0);
+      });

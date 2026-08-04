@@ -1,0 +1,35 @@
+$kind: http-request
+name: Create Town
+method: POST
+url: '{{baseUrl}}/api/admin/towns'
+order: 6000
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "townName": "Test Town"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200 or 201", function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+      pm.test("Response has town data", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("townId");
+          pm.expect(json).to.have.property("townName");
+      });
+      if (pm.response.code === 200 || pm.response.code === 201) {
+          const json = pm.response.json();
+          pm.globals.set("townId", json.townId);
+      }

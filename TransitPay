@@ -1,0 +1,423 @@
+using Microsoft.EntityFrameworkCore;
+using TransitPay.API.Data;
+using TransitPay.API.DTOs.Trip;
+using TransitPay.API.Enums;
+using TransitPay.API.Interfaces;
+using TransitPay.API.Models;
+
+namespace TransitPay.API.Services;
+
+/// <summary>
+/// Service for managing trips.
+/// Contains all trip business logic — controllers remain thin.
+/// </summary>
+public class TripService : ITripService
+{
+    private readonly TransitPayDbContext _dbContext;
+    private readonly ITripRepository _tripRepository;
+    private readonly ILogger<TripService> _logger;
+
+    public TripService(
+        TransitPayDbContext dbContext,
+        ITripRepository tripRepository,
+        ILogger<TripService> logger)
+    {
+        _dbContext = dbContext;
+        _tripRepository = tripRepository;
+        _logger = logger;
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> CreateTripAsync(int currentUserId, CreateTripRequest request)
+    {
+        _logger.LogInformation("Creating trip for driver {DriverId} by user {CurrentUserId}", request.DriverId, currentUserId);
+
+        // Validate inputs
+        if (request.DriverId <= 0)
+        {
+            return new TripResponse { Success = false, Message = "Invalid driver ID." };
+        }
+
+        if (request.OriginStationId <= 0)
+        {
+            return new TripResponse { Success = false, Message = "Invalid origin station ID." };
+        }
+
+        if (request.FinalDestinationStationId <= 0)
+        {
+            return new TripResponse { Success = false, Message = "Invalid final destination station ID." };
+        }
+
+        if (request.OriginStationId == request.FinalDestinationStationId)
+        {
+            return new TripResponse { Success = false, Message = "Origin and final destination stations must be different." };
+        }
+
+        // Validate driver exists and is active
+        var driver = await _dbContext.Users.FindAsync(request.DriverId);
+        if (driver == null)
+        {
+            return new TripResponse { Success = false, Message = "Driver not found." };
+        }
+
+        if (!driver.IsActive)
+        {
+            return new TripResponse { Success = false, Message = "Driver is not active." };
+        }
+
+        // Validate stations exist
+        var originStation = await _dbContext.Stations.FindAsync(request.OriginStationId);
+        if (originStation == null)
+        {
+            return new TripResponse { Success = false, Message = "Origin station not found." };
+        }
+
+        var finalDestinationStation = await _dbContext.Stations.FindAsync(request.FinalDestinationStationId);
+        if (finalDestinationStation == null)
+        {
+            return new TripResponse { Success = false, Message = "Final destination station not found." };
+        }
+
+        // Business rule: only one ACTIVE trip per conductor
+        if (await _tripRepository.HasActiveTripAsync(request.DriverId))
+        {
+            return new TripResponse { Success = false, Message = "Driver already has an active trip. Complete or cancel it before creating a new one." };
+        }
+
+        // Business rule: only one PENDING trip per conductor (prevents overlapping trips)
+        if (await _tripRepository.HasPendingTripAsync(request.DriverId))
+        {
+            return new TripResponse { Success = false, Message = "Driver already has a pending trip. Start or cancel it before creating a new one." };
+        }
+
+        // Auto-generate the route name from the origin and final destination stations
+        var routeName = string.IsNullOrWhiteSpace(request.RouteName)
+            ? $"{originStation.StationName} → {finalDestinationStation.StationName}"
+            : request.RouteName.Trim();
+
+        var trip = new Trip
+        {
+            DriverId = request.DriverId,
+            BusId = request.BusId,
+            OriginStationId = request.OriginStationId,
+            FinalDestinationStationId = request.FinalDestinationStationId,
+            RouteName = routeName,
+            TripStatus = TripStatus.Pending,
+            PassengerCount = 0,
+            TotalRevenue = 0m,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _tripRepository.AddAsync(trip);
+
+        _logger.LogInformation("Created trip {TripId} for driver {DriverId} on route {RouteName}",
+            trip.TripId, request.DriverId, routeName);
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Trip created successfully.",
+            Data = MapToData(trip, driver, originStation, finalDestinationStation)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> GetTripAsync(int tripId)
+    {
+        var trip = await _tripRepository.GetByIdWithDetailsAsync(tripId);
+        if (trip == null)
+        {
+            return new TripResponse { Success = false, Message = "Trip not found." };
+        }
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Trip retrieved successfully.",
+            Data = MapToData(trip, trip.Driver, trip.OriginStation, trip.FinalDestinationStation)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> GetDriverTripsAsync(int driverId)
+    {
+        var trips = await _tripRepository.GetByDriverAsync(driverId);
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Trips retrieved successfully.",
+            Data = null,
+            Trips = trips.Select(t => MapToData(t, t.Driver, t.OriginStation, t.FinalDestinationStation)).ToList()
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> GetActiveTripByDriverAsync(int driverId)
+    {
+        var trip = await _tripRepository.GetActiveByDriverAsync(driverId);
+        if (trip == null)
+        {
+            return new TripResponse { Success = false, Message = "No active trip found for this driver." };
+        }
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Active trip retrieved successfully.",
+            Data = MapToData(trip, trip.Driver, trip.OriginStation, trip.FinalDestinationStation)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> GetAllTripsAsync()
+    {
+        var trips = await _tripRepository.GetAllAsync();
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Trips retrieved successfully.",
+            Data = null,
+            Trips = trips.Select(t => MapToData(t, t.Driver, t.OriginStation, t.FinalDestinationStation)).ToList()
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> UpdateTripAsync(int tripId, int currentUserId, UpdateTripRequest request)
+    {
+        var trip = await _tripRepository.GetByIdWithDetailsAsync(tripId);
+        if (trip == null)
+        {
+            return new TripResponse { Success = false, Message = "Trip not found." };
+        }
+
+        // Only the trip's driver or an admin may update the trip
+        if (trip.DriverId != currentUserId && !await IsAdminAsync(currentUserId))
+        {
+            return new TripResponse { Success = false, Message = "You are not authorized to update this trip." };
+        }
+
+        // Business rule: origin never changes after starting.
+        // The origin and final destination stations are immutable once the trip has started.
+        if (trip.StartedAt != null)
+        {
+            return new TripResponse { Success = false, Message = "Trip origin and destination cannot be changed after the trip has started." };
+        }
+
+        // Only PENDING trips can be updated (route is locked once started)
+        if (trip.TripStatus != TripStatus.Pending)
+        {
+            return new TripResponse { Success = false, Message = "Only pending trips can be updated." };
+        }
+
+        // Update mutable fields
+        if (request.BusId.HasValue)
+        {
+            trip.BusId = request.BusId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.RouteName))
+        {
+            trip.RouteName = request.RouteName.Trim();
+        }
+
+        await _tripRepository.UpdateAsync(trip);
+
+        _logger.LogInformation("Updated trip {TripId} by user {CurrentUserId}", tripId, currentUserId);
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Trip updated successfully.",
+            Data = MapToData(trip, trip.Driver, trip.OriginStation, trip.FinalDestinationStation)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> StartTripAsync(int tripId, int currentUserId, StartTripRequest? request)
+    {
+        var trip = await _tripRepository.GetByIdWithDetailsAsync(tripId);
+        if (trip == null)
+        {
+            return new TripResponse { Success = false, Message = "Trip not found." };
+        }
+
+        // Only the trip's driver or an admin may start the trip
+        if (trip.DriverId != currentUserId && !await IsAdminAsync(currentUserId))
+        {
+            return new TripResponse { Success = false, Message = "You are not authorized to start this trip." };
+        }
+
+        if (trip.TripStatus != TripStatus.Pending)
+        {
+            return new TripResponse { Success = false, Message = "Only pending trips can be started." };
+        }
+
+        // Business rule: do not allow overlapping active trips for the same conductor
+        if (await _tripRepository.HasActiveTripAsync(trip.DriverId))
+        {
+            return new TripResponse { Success = false, Message = "Driver already has an active trip. Complete or cancel it before starting a new one." };
+        }
+
+        // Assign the bus at start time if provided
+        if (request?.BusId.HasValue == true)
+        {
+            trip.BusId = request.BusId;
+        }
+
+        trip.TripStatus = TripStatus.Active;
+        trip.StartedAt = DateTime.UtcNow;
+        trip.UpdatedAt = DateTime.UtcNow;
+
+        await _tripRepository.UpdateAsync(trip);
+
+        _logger.LogInformation("Started trip {TripId} for driver {DriverId}", tripId, trip.DriverId);
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Trip started successfully.",
+            Data = MapToData(trip, trip.Driver, trip.OriginStation, trip.FinalDestinationStation)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> CompleteTripAsync(int tripId, int currentUserId)
+    {
+        var trip = await _tripRepository.GetByIdWithDetailsAsync(tripId);
+        if (trip == null)
+        {
+            return new TripResponse { Success = false, Message = "Trip not found." };
+        }
+
+        // Only the trip's driver or an admin may complete the trip
+        if (trip.DriverId != currentUserId && !await IsAdminAsync(currentUserId))
+        {
+            return new TripResponse { Success = false, Message = "You are not authorized to complete this trip." };
+        }
+
+        if (trip.TripStatus != TripStatus.Active)
+        {
+            return new TripResponse { Success = false, Message = "Only active trips can be completed." };
+        }
+
+        trip.TripStatus = TripStatus.Completed;
+        trip.EndedAt = DateTime.UtcNow;
+        trip.UpdatedAt = DateTime.UtcNow;
+
+        await _tripRepository.UpdateAsync(trip);
+
+        _logger.LogInformation("Completed trip {TripId} for driver {DriverId}", tripId, trip.DriverId);
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Trip completed successfully.",
+            Data = MapToData(trip, trip.Driver, trip.OriginStation, trip.FinalDestinationStation)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<TripResponse> CancelTripAsync(int tripId, int currentUserId)
+    {
+        var trip = await _tripRepository.GetByIdWithDetailsAsync(tripId);
+        if (trip == null)
+        {
+            return new TripResponse { Success = false, Message = "Trip not found." };
+        }
+
+        // Only the trip's driver or an admin may cancel the trip
+        if (trip.DriverId != currentUserId && !await IsAdminAsync(currentUserId))
+        {
+            return new TripResponse { Success = false, Message = "You are not authorized to cancel this trip." };
+        }
+
+        if (trip.TripStatus != TripStatus.Pending && trip.TripStatus != TripStatus.Active)
+        {
+            return new TripResponse { Success = false, Message = "Only pending or active trips can be cancelled." };
+        }
+
+        trip.TripStatus = TripStatus.Cancelled;
+        if (trip.StartedAt != null)
+        {
+            trip.EndedAt = DateTime.UtcNow;
+        }
+        trip.UpdatedAt = DateTime.UtcNow;
+
+        await _tripRepository.UpdateAsync(trip);
+
+        _logger.LogInformation("Cancelled trip {TripId} for driver {DriverId}", tripId, trip.DriverId);
+
+        return new TripResponse
+        {
+            Success = true,
+            Message = "Trip cancelled successfully.",
+            Data = MapToData(trip, trip.Driver, trip.OriginStation, trip.FinalDestinationStation)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task RecordPassengerAndRevenueAsync(int tripId, decimal revenue)
+    {
+        var trip = await _tripRepository.GetByIdAsync(tripId);
+        if (trip == null)
+        {
+            _logger.LogWarning("Cannot record passenger/revenue: trip {TripId} not found", tripId);
+            return;
+        }
+
+        if (trip.TripStatus != TripStatus.Active)
+        {
+            _logger.LogWarning("Cannot record passenger/revenue: trip {TripId} is not active", tripId);
+            return;
+        }
+
+        trip.PassengerCount += 1;
+        trip.TotalRevenue += revenue;
+        trip.UpdatedAt = DateTime.UtcNow;
+
+        await _tripRepository.UpdateAsync(trip);
+
+        _logger.LogInformation("Recorded passenger on trip {TripId}. New count: {Count}, New revenue: {Revenue}",
+            tripId, trip.PassengerCount, trip.TotalRevenue);
+    }
+
+    /// <summary>
+    /// Determines whether the given user is an admin.
+    /// </summary>
+    private async Task<bool> IsAdminAsync(int userId)
+    {
+        var user = await _dbContext.Users
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.UserId == userId);
+
+        return user?.Role?.RoleName == RoleName.Admin;
+    }
+
+    /// <summary>
+    /// Maps a Trip entity to the response DTO.
+    /// </summary>
+    private static TripData MapToData(Trip trip, User? driver, Station? originStation, Station? finalDestinationStation)
+    {
+        return new TripData
+        {
+            TripId = trip.TripId,
+            DriverId = trip.DriverId,
+            DriverName = driver != null ? $"{driver.FirstName} {driver.LastName}".Trim() : null,
+            BusId = trip.BusId,
+            OriginStationId = trip.OriginStationId,
+            OriginStationName = originStation?.StationName,
+            FinalDestinationStationId = trip.FinalDestinationStationId,
+            FinalDestinationStationName = finalDestinationStation?.StationName,
+            RouteName = trip.RouteName,
+            TripStatus = trip.TripStatus,
+            StartedAt = trip.StartedAt,
+            EndedAt = trip.EndedAt,
+            PassengerCount = trip.PassengerCount,
+            TotalRevenue = trip.TotalRevenue,
+            CreatedAt = trip.CreatedAt,
+            UpdatedAt = trip.UpdatedAt
+        };
+    }
+}

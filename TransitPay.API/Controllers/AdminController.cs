@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Data;
+using TransitPay.API.Enums;
 using TransitPay.API.Models;
 
 namespace TransitPay.API.Controllers;
@@ -52,7 +53,7 @@ public class AdminController : ControllerBase
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var driverRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == "Driver");
+        var driverRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == RoleName.Driver);
         if (driverRole == null)
         {
             return Ok(new { success = true, message = "No drivers found.", data = new List<object>(), pagination = new { page, pageSize, total = 0, totalPages = 0 } });
@@ -172,8 +173,8 @@ public class AdminController : ControllerBase
         {
             OriginStationId = request.OriginStationId,
             DestinationStationId = request.DestinationStationId,
-            VehicleType = request.VehicleType,
-            PassengerType = request.PassengerType,
+            VehicleType = Enum.Parse<VehicleType>(request.VehicleType),
+            PassengerType = Enum.Parse<PassengerType>(request.PassengerType),
             FareAmount = request.FareAmount,
             EffectiveDate = request.EffectiveDate,
             IsActive = true,
@@ -206,6 +207,8 @@ public class AdminController : ControllerBase
                 t.Amount,
                 t.TransactionType,
                 t.TransactionName,
+                t.TransactionReferenceNumber,
+                t.ReferenceNumber,
                 t.CreatedAt
             })
             .ToListAsync();
@@ -223,12 +226,12 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> GetReportSummary()
     {
         var totalUsers = await _dbContext.Users.CountAsync(u => u.DeletedAt == null);
-        var totalDrivers = await _dbContext.Users.CountAsync(u => u.DeletedAt == null && u.Role!.RoleName == "Driver");
+        var totalDrivers = await _dbContext.Users.CountAsync(u => u.DeletedAt == null && u.Role!.RoleName == RoleName.Driver);
         var totalStations = await _dbContext.Stations.CountAsync(s => s.DeletedAt == null);
         var totalTowns = await _dbContext.Towns.CountAsync(t => t.DeletedAt == null);
         var totalTransactions = await _dbContext.Transactions.CountAsync(t => t.DeletedAt == null);
         var totalRevenue = await _dbContext.Transactions
-            .Where(t => t.DeletedAt == null && t.TransactionType == "PAYMENT")
+            .Where(t => t.DeletedAt == null && t.TransactionType == TransactionType.PAYMENT)
             .SumAsync(t => (decimal?)t.Amount) ?? 0m;
 
         return Ok(new

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Data;
+using TransitPay.API.Enums;
 using TransitPay.API.Models;
 
 namespace TransitPay.API.Controllers;
@@ -38,7 +39,7 @@ public class CardsController : ControllerBase
         {
             CardNumber = request.CardNumber,
             UserId = request.UserId,
-            Status = "ACTIVE",
+            Status = CardStatus.ACTIVE,
             IssueDate = DateTime.UtcNow,
             ExpiryDate = DateTime.UtcNow.AddYears(1),
             CreatedAt = DateTime.UtcNow
@@ -47,7 +48,7 @@ public class CardsController : ControllerBase
         _dbContext.Cards.Add(card);
         await _dbContext.SaveChangesAsync();
 
-        _dbContext.Wallets.Add(new Wallet { CardId = card.CardId, Balance = 0, Status = "ACTIVE", CreatedAt = DateTime.UtcNow });
+        _dbContext.Wallets.Add(new Wallet { CardId = card.CardId, Balance = 0, Status = CardStatus.ACTIVE, CreatedAt = DateTime.UtcNow });
         await _dbContext.SaveChangesAsync();
 
         return Ok(new { success = true, message = "Card created successfully.", data = card });
@@ -78,7 +79,7 @@ public class CardsController : ControllerBase
             return NotFound(new { success = false, message = "Card not found." });
         }
 
-        if (card.Status != "ACTIVE")
+        if (card.Status != CardStatus.ACTIVE)
         {
             return BadRequest(new { success = false, message = $"Card cannot be used. Status: {card.Status}" });
         }

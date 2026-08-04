@@ -5,13 +5,17 @@ import {
   ChevronRight, ArrowUpRight, ArrowDownLeft, RotateCcw,
   Bus, CreditCard, Phone, Lock, Plus, LogOut, Copy,
   CheckCircle, AlertCircle, Clock, TrendingUp, Bell,
-  Shield, HelpCircle, ChevronDown, RefreshCw, Zap
+  Shield, HelpCircle, ChevronDown, RefreshCw, Zap,
+  FileText, Upload, X, Check
 } from 'lucide-react'
+import { authService } from './lib/auth'
+import { paymentService, type PaymentSessionData } from './lib/payment'
+import { discountService, type DiscountType, type DiscountApplication } from './lib/discount'
 
 type Screen =
   | 'splash' | 'welcome' | 'login' | 'register' | 'forgot' | 'otp'
-  | 'home' | 'wallet' | 'topup' | 'topup-confirm' | 'topup-success'
-  | 'qr' | 'payment' | 'payment-confirm' | 'payment-success' | 'profile'
+  | 'home' | 'wallet' | 'topup' | 'qr' | 'profile'
+  | 'discounts' | 'apply-discount' | 'discount-status'
 
 const TOWNS = ['Quezon City', 'Marikina', 'Pasig', 'Mandaluyong', 'Manila', 'Parañaque', 'Las Piñas']
 const STATIONS: Record<string, string[]> = {
@@ -22,13 +26,6 @@ const STATIONS: Record<string, string[]> = {
   'Manila': ['Divisoria Station', 'Lawton Station', 'Quiapo Station', 'Tondo Station'],
   'Parañaque': ['BF Homes Station', 'Sucat Station', 'Airport Station'],
   'Las Piñas': ['Alabang Station', 'Zapote Station', 'Pamplona Station'],
-}
-
-function getFare(origin: string, dest: string) {
-  if (!origin || !dest) return 0
-  const base = 13
-  const distance = Math.abs(TOWNS.indexOf(origin) - TOWNS.indexOf(dest))
-  return base + distance * 5
 }
 
 const txHistory = [
@@ -105,8 +102,11 @@ function StatusChip({ status }: { status: string }) {
     pending: 'bg-yellow-50 text-yellow-700',
     failed: 'bg-red-50 text-red-700',
     refunded: 'bg-blue-50 text-blue-700',
+    approved: 'bg-green-50 text-green-700',
+    rejected: 'bg-red-50 text-red-700',
+    expired: 'bg-slate-50 text-slate-700',
   }
-  return <span className={`chip ${map[status] || map.completed}`}>{status}</span>
+  return <span className={`chip ${map[status.toLowerCase()] || map.completed}`}>{status}</span>
 }
 
 function TxIcon({ type }: { type: string }) {
@@ -148,7 +148,6 @@ function WelcomeScreen({ go }: { go: (s: Screen) => void }) {
   return (
     <div className="flex-1 flex flex-col min-h-full bg-white">
       <div className="flex-1 flex flex-col items-center justify-center bg-blue-gradient px-6 py-12 relative overflow-hidden">
-        {/* Decorative circles */}
         <div className="absolute top-[-60px] right-[-60px] w-52 h-52 rounded-full bg-white/10" />
         <div className="absolute bottom-[-40px] left-[-40px] w-40 h-40 rounded-full bg-white/10" />
         <div className="w-20 h-20 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center mb-6 shadow-xl">
@@ -187,10 +186,19 @@ function LoginScreen({ go }: { go: (s: Screen) => void }) {
   const [pass, setPass] = useState('')
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const submit = () => {
+  const submit = async () => {
     setLoading(true)
-    setTimeout(() => { setLoading(false); go('home') }, 1200)
+    setError('')
+    try {
+      await authService.login({ mobileNumber: mobile, password: pass })
+      go('home')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -209,6 +217,12 @@ function LoginScreen({ go }: { go: (s: Screen) => void }) {
         <Input label="Password" type={show ? 'text' : 'password'} placeholder="Enter password" value={pass} onChange={setPass}
           icon={<Lock size={16} />}
           trailing={<button onClick={() => setShow(!show)} className="text-slate-400">{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>} />
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-3 flex items-start gap-2">
+            <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-600">{error}</p>
+          </div>
+        )}
         <button onClick={() => go('forgot')} className="text-right text-sm text-blue-600 font-medium -mt-2">Forgot Password?</button>
         <Btn variant="primary" size="lg" onClick={submit} disabled={loading}>
           {loading ? <><RefreshCw size={16} className="animate-spin" /> Signing in...</> : 'Log In'}
@@ -228,6 +242,31 @@ function RegisterScreen({ go }: { go: (s: Screen) => void }) {
   const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async () => {
+    if (form.pass !== form.confirm) {
+      setError('Passwords do not match.')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      await authService.register({
+        firstName: form.first,
+        lastName: form.last,
+        mobileNumber: form.mobile,
+        password: form.pass,
+        roleName: 'Passenger'
+      })
+      // OTP disabled for testing - go directly to home
+      go('home')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="flex-1 flex flex-col min-h-full bg-[#F0F4FF]">
@@ -255,7 +294,13 @@ function RegisterScreen({ go }: { go: (s: Screen) => void }) {
             I agree to TransitPay's <span className="text-blue-600 font-medium">Terms of Service</span> and <span className="text-blue-600 font-medium">Privacy Policy</span>
           </label>
         </div>
-        <Btn variant="primary" size="lg" onClick={() => { setLoading(true); setTimeout(() => { setLoading(false); go('otp') }, 1000) }} disabled={loading}>
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-3 flex items-start gap-2">
+            <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-600">{error}</p>
+          </div>
+        )}
+        <Btn variant="primary" size="lg" onClick={submit} disabled={loading}>
           {loading ? <><RefreshCw size={16} className="animate-spin" /> Processing...</> : 'Create Account'}
         </Btn>
         <p className="text-center text-sm text-slate-500">
@@ -374,9 +419,6 @@ function HomeScreen({ go }: { go: (s: Screen) => void }) {
           <Btn variant="primary" size="sm" className="flex-1 !rounded-xl" onClick={() => go('topup')}>
             <Plus size={14} /> Top Up
           </Btn>
-          <Btn variant="secondary" size="sm" className="flex-1 !rounded-xl" onClick={() => go('payment')}>
-            <Bus size={14} /> Pay Fare
-          </Btn>
           <Btn variant="ghost" size="sm" className="!rounded-xl px-3 bg-blue-50" onClick={() => go('qr')}>
             <QrCode size={14} />
           </Btn>
@@ -389,8 +431,8 @@ function HomeScreen({ go }: { go: (s: Screen) => void }) {
         <div className="grid grid-cols-4 gap-2">
           {[
             { icon: QrCode, label: 'My QR', screen: 'qr' as Screen, color: 'bg-blue-50 text-blue-600' },
-            { icon: Bus, label: 'Pay Fare', screen: 'payment' as Screen, color: 'bg-indigo-50 text-indigo-600' },
-            { icon: Plus, label: 'Top Up', screen: 'topup' as Screen, color: 'bg-green-50 text-green-600' },
+            { icon: Wallet, label: 'Wallet', screen: 'wallet' as Screen, color: 'bg-green-50 text-green-600' },
+            { icon: FileText, label: 'Discounts', screen: 'discounts' as Screen, color: 'bg-purple-50 text-purple-600' },
             { icon: Clock, label: 'History', screen: 'wallet' as Screen, color: 'bg-orange-50 text-orange-600' },
           ].map(({ icon: Icon, label, screen, color }) => (
             <button key={label} onClick={() => go(screen)}
@@ -418,14 +460,14 @@ function HomeScreen({ go }: { go: (s: Screen) => void }) {
               <TxIcon type={tx.type} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-800 truncate">{tx.desc}</p>
-                <p className="text-xs text-slate-400 font-mono">{tx.date}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs text-slate-400 font-mono">{tx.date}</p>
+                  <StatusChip status={tx.status} />
+                </div>
               </div>
-              <div className="text-right shrink-0">
-                <p className={`text-sm font-bold ${tx.amount > 0 ? 'text-green-600' : 'text-slate-800'}`}>
-                  {tx.amount > 0 ? '+' : ''}₱{Math.abs(tx.amount).toFixed(2)}
-                </p>
-                <StatusChip status={tx.status} />
-              </div>
+              <p className={`text-sm font-bold shrink-0 ${tx.amount > 0 ? 'text-green-600' : 'text-slate-800'}`}>
+                {tx.amount > 0 ? '+' : ''}₱{Math.abs(tx.amount).toFixed(2)}
+              </p>
             </div>
           ))}
         </div>
@@ -454,9 +496,6 @@ function WalletScreen({ go }: { go: (s: Screen) => void }) {
         <div className="flex gap-3 mt-4">
           <Btn variant="primary" size="sm" className="flex-1 bg-white/20 hover:bg-white/30 !text-white border-white/30" onClick={() => go('topup')}>
             <ArrowDownLeft size={14} /> Top Up
-          </Btn>
-          <Btn variant="primary" size="sm" className="flex-1 bg-white/20 hover:bg-white/30 !text-white border-white/30" onClick={() => go('payment')}>
-            <Bus size={14} /> Pay
           </Btn>
         </div>
       </div>
@@ -519,15 +558,6 @@ function WalletScreen({ go }: { go: (s: Screen) => void }) {
 // ── TOP UP ────────────────────────────────────────────────────────────────────
 
 function TopUpScreen({ go }: { go: (s: Screen) => void }) {
-  const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState('')
-  const presets = ['50', '100', '200', '500', '1000']
-  const methods = [
-    { id: 'gcash', label: 'GCash', color: 'bg-blue-50 border-blue-200', icon: '💙' },
-    { id: 'maya', label: 'Maya', color: 'bg-green-50 border-green-200', icon: '💚' },
-    { id: 'cash', label: 'Cash', color: 'bg-yellow-50 border-yellow-200', icon: '💵' },
-  ]
-
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF] overflow-y-auto mobile-scroll">
       <div className="bg-blue-gradient px-5 pt-10 pb-14">
@@ -536,105 +566,40 @@ function TopUpScreen({ go }: { go: (s: Screen) => void }) {
         <p className="text-blue-100 text-sm mt-1">Current Balance: <span className="font-bold text-white">₱476.50</span></p>
       </div>
       <div className="-mt-6 bg-white rounded-t-3xl flex-1 px-5 pt-6 pb-6 flex flex-col gap-5">
-        {/* Amount */}
-        <div>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Enter Amount</label>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-poppins font-bold text-slate-400">₱</span>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
-              className="tp-input w-full pl-8 pr-4 py-4 rounded-2xl border border-slate-200 text-2xl font-bold font-poppins text-slate-800 bg-slate-50" />
+        {/* Admin credit notice */}
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 flex flex-col items-center gap-3 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center">
+            <Shield size={28} className="text-blue-600" />
           </div>
-          <div className="flex gap-2 mt-3 flex-wrap">
-            {presets.map(p => (
-              <button key={p} onClick={() => setAmount(p)}
-                className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all ${amount === p ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}>
-                ₱{p}
-              </button>
-            ))}
+          <div>
+            <p className="font-poppins font-bold text-slate-800">Admin-Managed Credits</p>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Online payment methods (GCash/Maya) are temporarily disabled for testing.
+              Please contact your administrator to add credits to your wallet.
+            </p>
           </div>
         </div>
 
-        {/* Payment Method */}
-        <div>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">Payment Method</label>
-          <div className="grid grid-cols-3 gap-2">
-            {methods.map(m => (
-              <button key={m.id} onClick={() => setMethod(m.id)}
-                className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${method === m.id ? 'border-blue-500 bg-blue-50 shadow-sm' : `border-slate-200 bg-white ${m.color}`}`}>
-                <span className="text-2xl">{m.icon}</span>
-                <span className="text-xs font-semibold text-slate-700">{m.label}</span>
-              </button>
-            ))}
+        <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">How to get credits:</p>
+          <div className="flex items-start gap-2">
+            <CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-600">Contact your system administrator</p>
+          </div>
+          <div className="flex items-start gap-2">
+            <CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-600">Provide your mobile number or card ID</p>
+          </div>
+          <div className="flex items-start gap-2">
+            <CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-600">Admin will credit your wallet directly</p>
           </div>
         </div>
 
-        {amount && method && (
-          <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
-            <p className="text-xs text-slate-500 mb-1">You'll receive</p>
-            <p className="font-poppins text-2xl font-bold text-blue-700">₱{parseFloat(amount || '0').toFixed(2)}</p>
-            <p className="text-xs text-slate-500 mt-1">via {methods.find(m => m.id === method)?.label}</p>
-          </div>
-        )}
-
-        <Btn variant="primary" size="lg" disabled={!amount || !method} onClick={() => go('topup-confirm')}>
-          Continue
+        <Btn variant="secondary" size="lg" onClick={() => go('wallet')}>
+          <ArrowLeft size={16} /> Back to Wallet
         </Btn>
       </div>
-    </div>
-  )
-}
-
-// ── TOP UP CONFIRM / SUCCESS ───────────────────────────────────────────────────
-
-function TopUpConfirmScreen({ go }: { go: (s: Screen) => void }) {
-  const [loading, setLoading] = useState(false)
-  return (
-    <div className="flex-1 flex flex-col bg-[#F0F4FF]">
-      <div className="bg-blue-gradient px-5 pt-10 pb-14">
-        <button onClick={() => go('topup')} className="text-white/80 mb-4 flex items-center gap-1"><ArrowLeft size={18} /> Back</button>
-        <h2 className="font-poppins text-xl font-bold text-white">Confirm Top Up</h2>
-      </div>
-      <div className="-mt-6 bg-white rounded-t-3xl flex-1 px-5 pt-6 pb-6 flex flex-col gap-4">
-        <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-3">
-          {[['Amount', '₱500.00'], ['Payment Method', 'GCash'], ['Processing Fee', '₱0.00'], ['Total', '₱500.00']].map(([k, v]) => (
-            <div key={k} className="flex justify-between items-center">
-              <span className="text-sm text-slate-500">{k}</span>
-              <span className={`text-sm font-semibold ${k === 'Total' ? 'text-blue-700 text-base' : 'text-slate-800'}`}>{v}</span>
-            </div>
-          ))}
-        </div>
-        <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100 flex items-start gap-3">
-          <AlertCircle size={16} className="text-blue-600 shrink-0 mt-0.5" />
-          <p className="text-xs text-slate-600 leading-relaxed">
-            By confirming, ₱500.00 will be deducted from your GCash account and credited to your TransitPay wallet.
-          </p>
-        </div>
-        <Btn variant="primary" size="lg" onClick={() => { setLoading(true); setTimeout(() => { setLoading(false); go('topup-success') }, 1200) }} disabled={loading}>
-          {loading ? <><RefreshCw size={16} className="animate-spin" /> Processing...</> : 'Confirm Top Up'}
-        </Btn>
-        <Btn variant="ghost" size="lg" onClick={() => go('wallet')}>Cancel</Btn>
-      </div>
-    </div>
-  )
-}
-
-function TopUpSuccessScreen({ go }: { go: (s: Screen) => void }) {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-[#F0F4FF] px-6 gap-5 fade-in">
-      <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center shadow-lg">
-        <CheckCircle size={48} className="text-green-500" />
-      </div>
-      <div className="text-center">
-        <h2 className="font-poppins text-2xl font-bold text-slate-800">Top Up Successful!</h2>
-        <p className="text-slate-500 text-sm mt-2">₱500.00 has been added to your wallet</p>
-      </div>
-      <div className="bg-white rounded-3xl p-5 w-full shadow-sm">
-        <p className="text-xs text-slate-500 text-center mb-3">New Balance</p>
-        <p className="font-poppins text-4xl font-bold text-blue-700 text-center">₱976.50</p>
-        <p className="text-xs text-slate-400 text-center mt-2 font-mono">REF: TPGC-20260802-4821</p>
-      </div>
-      <Btn variant="primary" size="lg" onClick={() => go('home')}>Back to Home</Btn>
-      <Btn variant="ghost" size="lg" onClick={() => go('wallet')}>View Transactions</Btn>
     </div>
   )
 }
@@ -642,8 +607,29 @@ function TopUpSuccessScreen({ go }: { go: (s: Screen) => void }) {
 // ── QR CODE ───────────────────────────────────────────────────────────────────
 
 function QRScreen({ go }: { go: (s: Screen) => void }) {
-  const qrData = JSON.stringify({ uid: 'USR-4821', name: 'Juan Dela Cruz', balance: 476.50, ts: Date.now() })
+  const [qrData, setQrData] = useState('')
+  const [qrSignature, setQrSignature] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    const fetchQR = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        // Use card ID 1 for testing (would come from auth context in production)
+        const ticket = await paymentService.getQR(1)
+        setQrData(ticket.data)
+        setQrSignature(ticket.signature)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to get QR')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchQR()
+  }, [])
 
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF] overflow-y-auto mobile-scroll">
@@ -662,7 +648,17 @@ function QRScreen({ go }: { go: (s: Screen) => void }) {
             <span className="font-poppins font-bold text-blue-700 text-sm">TransitPay</span>
           </div>
           <div className="p-3 bg-white rounded-2xl shadow-inner border border-slate-100">
-            <QRCodeSVG value={qrData} size={200} level="M" bgColor="#ffffff" fgColor="#1565C0" />
+            {loading ? (
+              <div className="w-[200px] h-[200px] flex items-center justify-center">
+                <RefreshCw size={32} className="text-blue-400 animate-spin" />
+              </div>
+            ) : error ? (
+              <div className="w-[200px] h-[200px] flex items-center justify-center text-center px-4">
+                <p className="text-xs text-red-500">{error}</p>
+              </div>
+            ) : (
+              <QRCodeSVG value={qrData} size={200} level="M" bgColor="#ffffff" fgColor="#1565C0" />
+            )}
           </div>
           <div className="text-center">
             <p className="font-poppins font-bold text-slate-800">Juan Dela Cruz</p>
@@ -680,7 +676,7 @@ function QRScreen({ go }: { go: (s: Screen) => void }) {
         <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-3.5 w-full flex items-start gap-2">
           <AlertCircle size={15} className="text-yellow-600 shrink-0 mt-0.5" />
           <p className="text-xs text-slate-600 leading-relaxed">
-            This QR code is unique to you. Do not share it with others. It refreshes every 5 minutes for security.
+            This is your permanent TransitPay QR code. It uniquely identifies your card — it does not change per trip. Do not share it with others.
           </p>
         </div>
 
@@ -688,157 +684,187 @@ function QRScreen({ go }: { go: (s: Screen) => void }) {
           <Btn variant="secondary" size="md" className="flex-1" onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }}>
             {copied ? <><CheckCircle size={14} /> Copied!</> : <><Copy size={14} /> Copy ID</>}
           </Btn>
-          <Btn variant="primary" size="md" className="flex-1" onClick={() => go('payment')}>
-            <Bus size={14} /> Pay Fare
-          </Btn>
         </div>
       </div>
     </div>
   )
 }
 
-// ── TRIP PAYMENT ──────────────────────────────────────────────────────────────
+// ── DISCOUNTS ─────────────────────────────────────────────────────────────────
 
-function PaymentScreen({ go }: { go: (s: Screen) => void }) {
-  const [originTown, setOriginTown] = useState('')
-  const [originStation, setOriginStation] = useState('')
-  const [destTown, setDestTown] = useState('')
-  const [destStation, setDestStation] = useState('')
+function DiscountsScreen({ go }: { go: (s: Screen) => void }) {
+  const [applications, setApplications] = useState<DiscountApplication[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const fare = getFare(originTown, destTown)
-  const balance = 476.50
-  const canPay = originTown && originStation && destTown && destStation
+  useEffect(() => {
+    loadApplications()
+  }, [])
+
+  const loadApplications = async () => {
+    try {
+      const apps = await discountService.getMyApplications(1) // Card ID 1 for testing
+      setApplications(apps)
+    } catch (error) {
+      console.error('Failed to load applications:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF] overflow-y-auto mobile-scroll">
-      <div className="bg-blue-gradient px-5 pt-10 pb-14">
-        <button onClick={() => go('home')} className="text-white/80 mb-4 flex items-center gap-1"><ArrowLeft size={18} /> Back</button>
-        <h2 className="font-poppins text-xl font-bold text-white">Pay Fare</h2>
-        <p className="text-blue-100 text-sm mt-1">Select your trip details</p>
+      <div className="bg-blue-gradient px-5 pt-10 pb-16 relative overflow-hidden">
+        <div className="absolute top-[-40px] right-[-40px] w-40 h-40 rounded-full bg-white/10" />
+        <h2 className="font-poppins text-xl font-bold text-white">My Discounts</h2>
+        <p className="text-blue-100 text-sm mt-1">View and apply for discounts</p>
       </div>
-      <div className="-mt-6 bg-white rounded-t-3xl flex-1 px-5 pt-6 pb-6 flex flex-col gap-4">
-        {/* Origin */}
-        <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-3">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-200" />
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Origin</p>
-          </div>
-          <Select label="Town" value={originTown} onChange={v => { setOriginTown(v); setOriginStation('') }}
-            options={TOWNS} />
-          <Select label="Station" value={originStation} onChange={setOriginStation}
-            options={originTown ? STATIONS[originTown] : []} />
+
+      <div className="-mt-6 bg-[#F0F4FF] rounded-t-3xl pt-4">
+        <div className="px-4 mb-4">
+          <Btn variant="primary" size="lg" onClick={() => go('apply-discount')}>
+            <Plus size={18} /> Apply for New Discount
+          </Btn>
         </div>
 
-        {/* Arrow */}
-        <div className="flex justify-center">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-            <ArrowUpRight size={16} className="text-blue-600 rotate-90" />
-          </div>
+        <div className="px-4 flex flex-col gap-2 pb-4">
+          <p className="font-poppins font-semibold text-sm text-slate-700">My Applications</p>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw size={24} className="text-blue-400 animate-spin" />
+            </div>
+          ) : applications.length === 0 ? (
+            <div className="bg-white rounded-2xl p-6 text-center">
+              <FileText size={32} className="text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">No discount applications yet</p>
+              <p className="text-xs text-slate-400 mt-1">Apply for a discount to get started</p>
+            </div>
+          ) : (
+            applications.map(app => (
+              <div key={app.discountApplicationId} className="bg-white rounded-2xl p-4 shadow-sm">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-slate-800">{app.discountTypeName || 'Discount'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{app.discountPercentage}% discount</p>
+                  </div>
+                  <StatusChip status={app.status} />
+                </div>
+                <p className="text-xs text-slate-400">Applied on {new Date(app.createdAt).toLocaleDateString()}</p>
+                {app.rejectionReason && (
+                  <div className="mt-2 bg-red-50 rounded-xl p-2.5">
+                    <p className="text-xs text-red-600"><strong>Reason:</strong> {app.rejectionReason}</p>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
-
-        {/* Destination */}
-        <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-3">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-200" />
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</p>
-          </div>
-          <Select label="Town" value={destTown} onChange={v => { setDestTown(v); setDestStation('') }}
-            options={TOWNS.filter(t => t !== originTown)} />
-          <Select label="Station" value={destStation} onChange={setDestStation}
-            options={destTown ? STATIONS[destTown] : []} />
-        </div>
-
-        {/* Fare summary */}
-        {canPay && (
-          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex flex-col gap-2 fade-in">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-slate-500">Fare Amount</span>
-              <span className="font-poppins font-bold text-blue-700">₱{fare.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-slate-500">Wallet Balance</span>
-              <span className="text-sm font-semibold text-slate-700">₱{balance.toFixed(2)}</span>
-            </div>
-            <div className="border-t border-blue-200 my-1" />
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-slate-500">Remaining Balance</span>
-              <span className={`font-poppins font-bold ${balance - fare < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                ₱{(balance - fare).toFixed(2)}
-              </span>
-            </div>
-          </div>
-        )}
-
-        <Btn variant="primary" size="lg" disabled={!canPay} onClick={() => go('payment-confirm')}>
-          {canPay ? `Confirm ₱${fare.toFixed(2)}` : 'Select Trip Details'}
-        </Btn>
       </div>
     </div>
   )
 }
 
-// ── PAYMENT CONFIRM / SUCCESS ─────────────────────────────────────────────────
+// ── APPLY FOR DISCOUNT ────────────────────────────────────────────────────────
 
-function PaymentConfirmScreen({ go }: { go: (s: Screen) => void }) {
+function ApplyDiscountScreen({ go }: { go: (s: Screen) => void }) {
+  const [discountTypes, setDiscountTypes] = useState<DiscountType[]>([])
+  const [selectedType, setSelectedType] = useState<DiscountType | null>(null)
+  const [document, setDocument] = useState('')
   const [loading, setLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+
+  useEffect(() => {
+    loadDiscountTypes()
+  }, [])
+
+  const loadDiscountTypes = async () => {
+    try {
+      const types = await discountService.getDiscountTypes()
+      setDiscountTypes(types.filter(t => t.isActive))
+    } catch (error) {
+      console.error('Failed to load discount types:', error)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedType) return
+    setLoading(true)
+    try {
+      await discountService.applyForDiscount(1, selectedType.discountTypeId, document)
+      setSubmitted(true)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to apply for discount')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (submitted) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-[#F0F4FF] px-6 gap-4">
+        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+          <CheckCircle size={40} className="text-green-600" />
+        </div>
+        <div className="text-center">
+          <h2 className="font-poppins text-xl font-bold text-slate-800">Application Submitted!</h2>
+          <p className="text-sm text-slate-500 mt-1">Your discount application is pending approval</p>
+        </div>
+        <Btn variant="primary" size="lg" onClick={() => go('discount-status')}>
+          View My Applications
+        </Btn>
+        <Btn variant="ghost" size="lg" onClick={() => go('home')}>
+          Back to Home
+        </Btn>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF]">
       <div className="bg-blue-gradient px-5 pt-10 pb-14">
-        <button onClick={() => go('payment')} className="text-white/80 mb-4 flex items-center gap-1"><ArrowLeft size={18} /> Back</button>
-        <h2 className="font-poppins text-xl font-bold text-white">Confirm Payment</h2>
+        <button onClick={() => go('discounts')} className="text-white/80 mb-4 flex items-center gap-1">
+          <ArrowLeft size={18} /> Back
+        </button>
+        <h2 className="font-poppins text-xl font-bold text-white">Apply for Discount</h2>
+        <p className="text-blue-100 text-sm mt-1">Select a discount type and upload your ID</p>
       </div>
       <div className="-mt-6 bg-white rounded-t-3xl flex-1 px-5 pt-6 pb-6 flex flex-col gap-4">
-        <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-3">
-          {[['From', 'Cubao Station, QC'], ['To', 'Ortigas Station, Pasig'], ['Fare', '₱23.00'], ['Wallet Balance', '₱476.50'], ['After Payment', '₱453.50']].map(([k, v]) => (
-            <div key={k} className="flex justify-between">
-              <span className="text-sm text-slate-500">{k}</span>
-              <span className={`text-sm font-semibold ${k === 'After Payment' ? 'text-green-600' : k === 'Fare' ? 'text-blue-700 font-bold' : 'text-slate-800'}`}>{v}</span>
-            </div>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-semibold text-slate-700">Discount Type</p>
+          {discountTypes.map(type => (
+            <button
+              key={type.discountTypeId}
+              onClick={() => setSelectedType(type)}
+              className={`p-4 rounded-2xl border-2 text-left transition-all ${selectedType?.discountTypeId === type.discountTypeId ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-slate-800">{type.name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{type.description}</p>
+                  <p className="text-xs text-blue-600 font-semibold mt-1">{type.discountPercentage}% discount</p>
+                </div>
+                {selectedType?.discountTypeId === type.discountTypeId && (
+                  <CheckCircle size={20} className="text-blue-600" />
+                )}
+              </div>
+            </button>
           ))}
         </div>
-        <div className="bg-blue-50 rounded-2xl p-3.5 border border-blue-100 flex items-start gap-2">
-          <Shield size={15} className="text-blue-600 shrink-0 mt-0.5" />
-          <p className="text-xs text-slate-600 leading-relaxed">Payment is secured and encrypted. A receipt will be stored in your transaction history.</p>
-        </div>
-        <Btn variant="primary" size="lg" onClick={() => { setLoading(true); setTimeout(() => { setLoading(false); go('payment-success') }, 1500) }} disabled={loading}>
-          {loading ? <><RefreshCw size={16} className="animate-spin" /> Processing...</> : 'Confirm Payment'}
-        </Btn>
-        <Btn variant="ghost" size="lg" onClick={() => go('home')}>Cancel</Btn>
-      </div>
-    </div>
-  )
-}
 
-function PaymentSuccessScreen({ go }: { go: (s: Screen) => void }) {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-[#F0F4FF] px-6 gap-5 fade-in">
-      <div className="relative">
-        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center shadow-lg">
-          <CheckCircle size={48} className="text-green-500" />
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-slate-700">Document / ID Number (Optional)</label>
+          <Input
+            placeholder="Enter your ID number or document reference"
+            value={document}
+            onChange={setDocument}
+            icon={<FileText size={16} />}
+          />
+          <p className="text-xs text-slate-500">Provide your discount ID or document number for verification</p>
         </div>
-        <div className="absolute inset-0 rounded-full bg-green-100 pulse-ring" />
+
+        <Btn variant="primary" size="lg" onClick={handleSubmit} disabled={!selectedType || loading}>
+          {loading ? <><RefreshCw size={16} className="animate-spin" /> Submitting...</> : 'Submit Application'}
+        </Btn>
       </div>
-      <div className="text-center">
-        <h2 className="font-poppins text-2xl font-bold text-slate-800">Payment Successful!</h2>
-        <p className="text-slate-500 text-sm mt-2">Your fare has been processed</p>
-      </div>
-      <div className="bg-white rounded-3xl p-5 w-full shadow-sm flex flex-col gap-3">
-        <div className="text-center border-b border-slate-100 pb-3">
-          <p className="text-xs text-slate-400 font-mono">Cubao Station → Ortigas Station</p>
-          <p className="font-poppins text-3xl font-bold text-blue-700 mt-1">₱23.00</p>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">Remaining Balance</span>
-          <span className="font-semibold text-slate-800">₱453.50</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">Reference No.</span>
-          <span className="font-mono text-xs text-slate-600">TPFR-20260802-0923</span>
-        </div>
-        <div className="flex justify-center"><StatusChip status="completed" /></div>
-      </div>
-      <Btn variant="primary" size="lg" onClick={() => go('home')}>Back to Home</Btn>
-      <Btn variant="ghost" size="lg" onClick={() => go('wallet')}>View Receipt</Btn>
     </div>
   )
 }
@@ -876,13 +902,15 @@ function ProfileScreen({ go }: { go: (s: Screen) => void }) {
       {/* Menu items */}
       <div className="mx-4 mt-4 bg-white rounded-2xl overflow-hidden shadow-sm">
         {[
+          { icon: QrCode, label: 'My QR Code', sub: 'Show to driver', screen: 'qr' as Screen },
+          { icon: FileText, label: 'Discounts', sub: 'Apply and view status', screen: 'discounts' as Screen },
           { icon: CreditCard, label: 'Linked Card', sub: '•••• 4821', },
           { icon: Lock, label: 'Change Password', sub: 'Update your security', },
           { icon: Bell, label: 'Notifications', sub: 'Manage alerts', },
           { icon: HelpCircle, label: 'Help & Support', sub: 'FAQs and contact', },
           { icon: Shield, label: 'Privacy & Security', sub: 'Manage permissions', },
-        ].map(({ icon: Icon, label, sub }, i, arr) => (
-          <button key={label} className={`w-full flex items-center gap-3 px-4 py-4 hover:bg-slate-50 transition-colors ${i < arr.length - 1 ? 'border-b border-slate-100' : ''}`}>
+        ].map(({ icon: Icon, label, sub, screen }, i, arr) => (
+          <button key={label} onClick={() => screen && go(screen)} className={`w-full flex items-center gap-3 px-4 py-4 hover:bg-slate-50 transition-colors ${i < arr.length - 1 ? 'border-b border-slate-100' : ''}`}>
             <div className="w-9 h-9 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
               <Icon size={16} className="text-blue-600" />
             </div>
@@ -890,7 +918,7 @@ function ProfileScreen({ go }: { go: (s: Screen) => void }) {
               <p className="text-sm font-semibold text-slate-800">{label}</p>
               <p className="text-xs text-slate-400">{sub}</p>
             </div>
-            <ChevronRight size={16} className="text-slate-300" />
+            {screen && <ChevronRight size={16} className="text-slate-300" />}
           </button>
         ))}
       </div>
@@ -940,7 +968,7 @@ function BottomNav({ current, go }: { current: Screen; go: (s: Screen) => void }
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 
-const showNav: Screen[] = ['home', 'wallet', 'qr', 'profile', 'payment', 'topup', 'topup-confirm', 'topup-success', 'payment-confirm', 'payment-success']
+const showNav: Screen[] = ['home', 'wallet', 'qr', 'profile', 'discounts']
 
 export default function PassengerApp() {
   const [screen, setScreen] = useState<Screen>('splash')
@@ -958,13 +986,10 @@ export default function PassengerApp() {
         {screen === 'home' && <HomeScreen go={go} />}
         {screen === 'wallet' && <WalletScreen go={go} />}
         {screen === 'topup' && <TopUpScreen go={go} />}
-        {screen === 'topup-confirm' && <TopUpConfirmScreen go={go} />}
-        {screen === 'topup-success' && <TopUpSuccessScreen go={go} />}
         {screen === 'qr' && <QRScreen go={go} />}
-        {screen === 'payment' && <PaymentScreen go={go} />}
-        {screen === 'payment-confirm' && <PaymentConfirmScreen go={go} />}
-        {screen === 'payment-success' && <PaymentSuccessScreen go={go} />}
         {screen === 'profile' && <ProfileScreen go={go} />}
+        {screen === 'discounts' && <DiscountsScreen go={go} />}
+        {screen === 'apply-discount' && <ApplyDiscountScreen go={go} />}
       </div>
       {showNav.includes(screen) && <BottomNav current={screen} go={go} />}
     </div>

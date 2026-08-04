@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
+using TransitPay.API.DTOs.Auth;
 using TransitPay.API.Interfaces;
 
 namespace TransitPay.API.Controllers;
@@ -16,7 +17,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    public async Task<ActionResult<RegisterResponse>> Register([FromBody] RegisterRequest request)
     {
         if (!ModelState.IsValid)
         {
@@ -24,11 +25,15 @@ public class AuthController : ControllerBase
         }
 
         var result = await _authService.RegisterAsync(request.FirstName, request.LastName, request.MobileNumber, request.Password, request.RoleName);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
         return Ok(result);
     }
 
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
         if (!ModelState.IsValid)
         {
@@ -36,11 +41,15 @@ public class AuthController : ControllerBase
         }
 
         var result = await _authService.LoginAsync(request.MobileNumber, request.Password);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
         return Ok(result);
     }
 
     [HttpPost("refresh")]
-    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+    public async Task<ActionResult<RefreshTokenResponse>> Refresh([FromBody] RefreshTokenRequest request)
     {
         if (!ModelState.IsValid)
         {
@@ -48,6 +57,10 @@ public class AuthController : ControllerBase
         }
 
         var result = await _authService.RefreshTokenAsync(request.UserId, request.RefreshToken);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
         return Ok(result);
     }
 }
