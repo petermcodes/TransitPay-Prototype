@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using TransitPay.API.Enums;
 
 namespace TransitPay.API.Models;
 
@@ -24,7 +25,14 @@ public class Card
     public DateTime? ExpiryDate { get; set; }
 
     [Column("status")]
-    public string Status { get; set; } = "ACTIVE";
+    public CardStatus Status { get; set; } = CardStatus.ACTIVE;
+
+    /// <summary>
+    /// The passenger type associated with this card (Regular, Student, Senior, etc.).
+    /// Used for fare rule lookup to apply the correct fare.
+    /// </summary>
+    [Column("passenger_type")]
+    public PassengerType PassengerType { get; set; } = PassengerType.Passenger;
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -37,5 +45,6 @@ public class Card
 
     public User? User { get; set; }
     public Wallet? Wallet { get; set; }
+    public QRCode? QRCode { get; set; }
     public ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
 }

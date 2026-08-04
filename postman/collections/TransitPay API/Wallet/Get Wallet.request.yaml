@@ -1,0 +1,30 @@
+$kind: http-request
+name: Get Wallet
+method: GET
+url: '{{baseUrl}}/api/wallet/{{cardId}}'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response has wallet data", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("walletId");
+          pm.expect(json).to.have.property("balance");
+      });
+      pm.test("Balance is a non-negative number", function () {
+          const json = pm.response.json();
+          pm.expect(json.balance).to.be.a("number").and.at.least(0);
+      });
+      if (pm.response.code === 200) {
+          const json = pm.response.json();
+          pm.globals.set("walletId", json.walletId);
+      }

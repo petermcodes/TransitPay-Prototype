@@ -1,0 +1,30 @@
+$kind: http-request
+name: Get Transactions
+method: GET
+url: '{{baseUrl}}/api/transactions/{{cardId}}'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response is an array or paginated object", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.satisfy(function(val) {
+              return Array.isArray(val) || (typeof val === "object" && val !== null);
+          });
+      });
+      pm.test("Response has pagination info", function () {
+          const json = pm.response.json();
+          // Accept either direct array or paginated wrapper
+          if (!Array.isArray(json)) {
+              pm.expect(json).to.have.property("page");
+          }
+      });

@@ -1,8 +1,10 @@
 namespace TransitPay.API.Interfaces;
 
+using TransitPay.API.DTOs.Auth;
+
 public interface IAuthService
 {
-    Task<object> RegisterAsync(string firstName, string lastName, string mobileNumber, string password, string roleName);
-    Task<object> LoginAsync(string mobileNumber, string password);
-    Task<object> RefreshTokenAsync(int userId, string refreshToken);
+    Task<RegisterResponse> RegisterAsync(string firstName, string lastName, string mobileNumber, string password, string roleName);
+    Task<LoginResponse> LoginAsync(string mobileNumber, string password);
+    Task<RefreshTokenResponse> RefreshTokenAsync(int userId, string refreshToken);
 }

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using TransitPay.API.Enums;
 
 namespace TransitPay.API.Models;
 
@@ -18,7 +19,7 @@ public class Wallet
     public decimal Balance { get; set; } = 0;
 
     [Column("status")]
-    public string Status { get; set; } = "ACTIVE";
+    public CardStatus Status { get; set; } = CardStatus.ACTIVE;
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

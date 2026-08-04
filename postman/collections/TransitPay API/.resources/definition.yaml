@@ -1,0 +1,6 @@
+$kind: collection
+name: TransitPay API
+variables:
+  - key: baseUrl
+    value: 'http://localhost:5000'
+    description: Base URL for the TransitPay API

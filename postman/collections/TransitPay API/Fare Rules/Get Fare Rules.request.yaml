@@ -1,0 +1,23 @@
+$kind: http-request
+name: Get Fare Rules
+method: GET
+url: '{{baseUrl}}/api/farerule'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response is valid", function () {
+          pm.expect(pm.response.json()).to.be.an("object").or.to.be.an("array");
+      });
+      pm.test("Response time is under 3000ms", function () {
+          pm.expect(pm.response.responseTime).to.be.below(3000);
+      });

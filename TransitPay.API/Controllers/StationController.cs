@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -30,10 +31,32 @@ public class StationController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateStation([FromBody] Station station)
+    public async Task<IActionResult> CreateStation([FromBody] StationCreateRequest request)
     {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+        }
+
+        var station = new Station
+        {
+            TownId = request.TownId,
+            StationName = request.StationName,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
         _dbContext.Stations.Add(station);
         await _dbContext.SaveChangesAsync();
         return Ok(new { success = true, message = "Station created successfully.", data = station });
     }
+}
+
+public class StationCreateRequest
+{
+    [Required(ErrorMessage = "Town ID is required.")]
+    public int TownId { get; set; }
+
+    [Required(ErrorMessage = "Station name is required.")]
+    [StringLength(100, MinimumLength = 2, ErrorMessage = "Station name must be between 2 and 100 characters.")]
+    public string StationName { get; set; } = string.Empty;
 }

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using TransitPay.API.Enums;
 
 namespace TransitPay.API.Models;
 
@@ -19,10 +20,10 @@ public class FareRule
     public int DestinationStationId { get; set; }
 
     [Column("vehicle_type")]
-    public string VehicleType { get; set; } = string.Empty;
+    public VehicleType VehicleType { get; set; }
 
     [Column("passenger_type")]
-    public string PassengerType { get; set; } = string.Empty;
+    public PassengerType PassengerType { get; set; }
 
     [Column("fare_amount")]
     public decimal FareAmount { get; set; }

@@ -1,0 +1,35 @@
+$kind: http-request
+name: Top Up Wallet
+method: POST
+url: '{{baseUrl}}/api/wallet/topup'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "cardId": "{{cardId}}",
+      "amount": 500
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response confirms top up", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("newBalance");
+      });
+      pm.test("New balance is greater than zero", function () {
+          const json = pm.response.json();
+          pm.expect(json.newBalance).to.be.above(0);
+      });

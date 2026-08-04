@@ -1,0 +1,36 @@
+$kind: http-request
+name: Create Station
+method: POST
+url: '{{baseUrl}}/api/station'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "townId": "{{townId}}",
+      "stationName": "Test Station"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200 or 201", function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+      pm.test("Response has station data", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("stationId");
+          pm.expect(json).to.have.property("stationName");
+      });
+      if (pm.response.code === 200 || pm.response.code === 201) {
+          const json = pm.response.json();
+          pm.globals.set("stationId", json.stationId);
+      }

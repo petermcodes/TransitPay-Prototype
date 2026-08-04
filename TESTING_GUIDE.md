@@ -8,15 +8,15 @@ Yes, you can test the project despite the identified issues! This guide will hel
 ## Prerequisites
 
 ### Required Software
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - [Node.js 18+](https://nodejs.org/)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [PostgreSQL](https://www.postgresql.org/download/) (local installation, managed via [pgAdmin4](https://www.pgadmin.org/download/))
 - [Postman](https://www.postman.com/downloads/) or similar API testing tool (optional)
 
 ### System Requirements
 - Windows 10/11, macOS, or Linux
 - At least 4GB RAM available
-- Ports 5000-5005, 5173-5175, and 5432 available
+- Ports 5132, 5173-5175, and 5432 available
 
 ---
 
@@ -24,16 +24,26 @@ Yes, you can test the project despite the identified issues! This guide will hel
 
 ### 1. Start the Database
 
-```bash
-# From the project root
-cd TransitPay-Prototype
-docker-compose up -d
+The project uses a **local PostgreSQL** installation managed through **pgAdmin4** (no Docker required).
 
-# Verify PostgreSQL is running
-docker-compose ps
-```
+**Setup steps:**
 
-Expected output: `transitpay-db` should show as "Up"
+1. **Install PostgreSQL** if you haven't already: [PostgreSQL Download](https://www.postgresql.org/download/)
+2. **Open pgAdmin4** and connect to your local PostgreSQL server (default port: `5432`)
+3. **Create the database**:
+   - Right-click on **Databases** → **Create** → **Database**
+   - Database name: `TransitPayDB`
+   - Owner: `postgres`
+   - Click **Save**
+
+4. **Verify the connection** matches the API's expected settings:
+   - Host: `localhost`
+   - Port: `5432`
+   - Database: `TransitPayDB`
+   - Username: `postgres`
+   - Password: `Akosipm123!` (or set the `DB_PASSWORD` environment variable)
+
+> **Note:** The API will automatically apply migrations and seed initial data (roles, admin user, towns, stations, fare rules, and a test card) on startup.
 
 ### 2. Start the Backend API
 
@@ -43,12 +53,12 @@ dotnet restore
 dotnet run
 ```
 
-The API will start at: `https://localhost:5001` (or `http://localhost:5000`)
+The API will start at: `http://localhost:5132`
 
 **Access points:**
-- API Base URL: `https://localhost:5001/api`
-- Swagger UI: `https://localhost:5001/swagger`
-- Health Check: `https://localhost:5001/health`
+- API Base URL: `http://localhost:5132/api`
+- Swagger UI: `http://localhost:5132/swagger`
+- Health Check: `http://localhost:5132/health`
 
 ### 3. Test the Frontend Apps (Optional)
 
@@ -80,7 +90,7 @@ npm run dev
 
 ### Method 1: Using Swagger UI (Easiest)
 
-1. Navigate to `https://localhost:5001/swagger`
+1. Navigate to `http://localhost:5132/swagger`
 2. You'll see all available API endpoints
 3. Click on any endpoint to expand it
 4. Click "Try it out"
@@ -95,7 +105,7 @@ Import the following endpoints into your API client:
 
 **1. Register a New User**
 ```
-POST https://localhost:5001/api/auth/register
+POST http://localhost:5132/api/auth/register
 Content-Type: application/json
 
 {
@@ -109,7 +119,7 @@ Content-Type: application/json
 
 **2. Login**
 ```
-POST https://localhost:5001/api/auth/login
+POST http://localhost:5132/api/auth/login
 Content-Type: application/json
 
 {
@@ -125,7 +135,7 @@ Content-Type: application/json
 
 **3. Refresh Token**
 ```
-POST https://localhost:5001/api/auth/refresh
+POST http://localhost:5132/api/auth/refresh
 Content-Type: application/json
 
 {
@@ -143,60 +153,61 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 **1. Preview Fare**
 ```
-GET https://localhost:5001/api/payment/fare/1/2
+GET http://localhost:5132/api/payment/fare/1/2
 ```
 
 **2. Process Payment**
 ```
-POST https://localhost:5001/api/payment/fare
+POST http://localhost:5132/api/payment/fare
 Content-Type: application/json
 
 {
   "cardId": 1,
-  "stationId": 2,
-  "amount": 0
+  "stationId": 2
 }
 ```
+
+> **Note:** The `amount` field has been removed for security. The server always determines the fare from active fare rules.
 
 #### Admin Endpoints (Requires Admin Role)
 
 **Default Admin Credentials:**
-- Username: `Admin`
+- Mobile: `0000000000`
 - Password: `Admin`
 
 **1. Get All Users**
 ```
-GET https://localhost:5001/api/admin/users
+GET http://localhost:5132/api/admin/users
 Authorization: Bearer {admin-token}
 ```
 
 **2. Get All Stations**
 ```
-GET https://localhost:5001/api/admin/stations
+GET http://localhost:5132/api/admin/stations
 Authorization: Bearer {admin-token}
 ```
 
 **3. Get All Towns**
 ```
-GET https://localhost:5001/api/admin/towns
+GET http://localhost:5132/api/admin/towns
 Authorization: Bearer {admin-token}
 ```
 
 **4. Get Fare Rules**
 ```
-GET https://localhost:5001/api/admin/fare-rules
+GET http://localhost:5132/api/admin/fare-rules
 Authorization: Bearer {admin-token}
 ```
 
 **5. Get Transactions**
 ```
-GET https://localhost:5001/api/admin/transactions?page=1&pageSize=20
+GET http://localhost:5132/api/admin/transactions?page=1&pageSize=20
 Authorization: Bearer {admin-token}
 ```
 
 **6. Get Report Summary**
 ```
-GET https://localhost:5001/api/admin/reports/summary
+GET http://localhost:5132/api/admin/reports/summary
 Authorization: Bearer {admin-token}
 ```
 
@@ -204,17 +215,17 @@ Authorization: Bearer {admin-token}
 
 ```bash
 # Register a user
-curl -X POST https://localhost:5001/api/auth/register \
+curl -X POST http://localhost:5132/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"firstName":"Juan","lastName":"Dela Cruz","mobileNumber":"09171234567","password":"Test123!","roleName":"Passenger"}'
 
 # Login
-curl -X POST https://localhost:5001/api/auth/login \
+curl -X POST http://localhost:5132/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"mobileNumber":"09171234567","password":"Test123!"}'
 
 # Health check
-curl https://localhost:5001/health
+curl http://localhost:5132/health
 ```
 
 ---
@@ -239,7 +250,7 @@ curl https://localhost:5001/health
 - ✅ Buttons show loading states
 - ✅ Responsive design on mobile viewport
 
-**Note:** Currently uses mock data - no real API calls
+**Note:** Login and registration are wired to the backend API. Payment, top-up, and wallet features still use mock data.
 
 ### Driver App Testing
 
@@ -255,13 +266,14 @@ curl https://localhost:5001/health
 - ✅ Screen transitions
 - ✅ Data display
 
-**Note:** Currently uses mock data - no real API calls
+**Note:** Login is wired to the backend API. Card validation is wired to the backend API. Trip history and earnings still use mock data.
 
 ### Admin Dashboard Testing
 
 **Test Flow:**
 1. Open `http://localhost:5175`
-2. Navigate through sidebar sections:
+2. Login with admin credentials (mobile: `0000000000`, password: `Admin`)
+3. Navigate through sidebar sections:
    - Dashboard
    - Passengers
    - Drivers
@@ -279,7 +291,7 @@ curl https://localhost:5001/health
 - ✅ Responsive layout
 - ✅ Charts and KPIs render
 
-**Note:** Currently uses mock data - no real API calls
+**Note:** Login, towns, stations, and fare rules are wired to the backend API. Users, drivers, transactions, and reports still use mock data.
 
 ---
 
@@ -291,13 +303,14 @@ dotnet test
 ```
 
 **Current test coverage:**
-- 1 test for PaymentService
+- 6 tests for PaymentService
 - Uses InMemory database for isolation
+- Tests include: fare deduction, invalid inputs, inactive cards, insufficient balance, and server-determined fare security
 
 **Expected output:**
 ```
-Total tests: 1
-Passed: 1
+Total tests: 6
+Passed: 6
 Failed: 0
 ```
 
@@ -307,13 +320,18 @@ Failed: 0
 
 ### Connect to PostgreSQL
 
+**Using pgAdmin4 (recommended):**
+
+1. Open **pgAdmin4**
+2. Connect to your local PostgreSQL server
+3. Expand **Databases** → **TransitPayDB**
+4. Use the **Query Tool** to run SQL queries
+
+**Using psql (if installed):**
+
 ```bash
-# Using psql (if installed)
 psql -h localhost -p 5432 -U postgres -d TransitPayDB
 # Password: Akosipm123!
-
-# Or using Docker exec
-docker exec -it transitpay-db psql -U postgres -d TransitPayDB
 ```
 
 ### Verify Seeded Data
@@ -380,8 +398,7 @@ SELECT username, first_name, last_name FROM users WHERE username = 'Admin';
    Authorization: Bearer {token}
    {
      "cardId": 1,
-     "stationId": 2,
-     "amount": 0
+     "stationId": 2
    }
    ```
 
@@ -446,17 +463,16 @@ SELECT username, first_name, last_name FROM users WHERE username = 'Admin';
 **Solutions:**
 ```bash
 # Check if PostgreSQL is running
-docker-compose ps
-
-# View PostgreSQL logs
-docker-compose logs postgres
-
-# Restart PostgreSQL
-docker-compose restart postgres
+# - In pgAdmin4, verify the server shows a green status icon
+# - Or check the Windows Services (services.msc) for "postgresql-x64-*" service
 
 # Verify port 5432 is not in use
 netstat -ano | findstr :5432  # Windows
 lsof -i :5432                 # macOS/Linux
+
+# Restart PostgreSQL
+# - In pgAdmin4: Right-click the server → Restart Server
+# - Or via Windows Services: Right-click "postgresql-x64-*" → Restart
 ```
 
 ### API Won't Start
@@ -473,8 +489,8 @@ dotnet build
 dotnet restore
 
 # Check if ports are available
-netstat -ano | findstr :5000  # Windows
-lsof -i :5000                 # macOS/Linux
+netstat -ano | findstr :5132  # Windows
+lsof -i :5132                 # macOS/Linux
 ```
 
 ### Frontend App Issues
@@ -500,7 +516,7 @@ node --version  # Should be 18+
 
 **Solutions:**
 - Ensure you're sending the token in the Authorization header
-- Check token hasn't expired (default: 15 minutes)
+- Check token hasn't expired (default: 8 hours)
 - Use refresh token endpoint to get new access token
 
 ---
@@ -511,10 +527,10 @@ node --version  # Should be 18+
 
 ```bash
 # Test health endpoint
-ab -n 1000 -c 10 https://localhost:5001/health
+ab -n 1000 -c 10 http://localhost:5132/health
 
 # Test login endpoint
-ab -n 100 -c 5 -p login.json -T application/json https://localhost:5001/api/auth/login
+ab -n 100 -c 5 -p login.json -T application/json http://localhost:5132/api/auth/login
 ```
 
 ### Database Performance
@@ -562,7 +578,7 @@ Before deploying to production, you must:
    - Enable HTTPS only
 
 2. **Complete API Integration**
-   - Connect frontend apps to backend
+   - Connect remaining frontend features to backend
    - Implement proper error handling
    - Add loading states
 
@@ -585,7 +601,7 @@ If you encounter issues:
 1. Check the console logs for error messages
 2. Verify all prerequisites are installed
 3. Ensure ports are not in use
-4. Check Docker is running
+4. Check that PostgreSQL is running in pgAdmin4
 5. Review the troubleshooting section above
 
 ---
@@ -617,8 +633,9 @@ Use this checklist to track your testing progress:
 - [ ] Animations work smoothly
 
 ### Database
-- [ ] PostgreSQL is running
-- [ ] Can connect with psql
+- [ ] PostgreSQL is running in pgAdmin4
+- [ ] `TransitPayDB` database exists
+- [ ] Can connect with psql or pgAdmin4 Query Tool
 - [ ] Seeded data exists
 - [ ] Migrations applied successfully
 - [ ] Can query tables

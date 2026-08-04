@@ -1,0 +1,40 @@
+$kind: http-request
+name: Create Fare Rule
+method: POST
+url: '{{baseUrl}}/api/farerule'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "originStationId": "{{stationId}}",
+      "destinationStationId": "{{stationId}}",
+      "vehicleType": "Bus",
+      "passengerType": "Regular",
+      "fareAmount": 25.00,
+      "effectiveDate": "2025-01-01"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200 or 201", function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+      pm.test("Response has fare rule data", function () {
+          const json = pm.response.json();
+          pm.expect(json).to.have.property("fareRuleId");
+          pm.expect(json).to.have.property("fareAmount");
+      });
+      pm.test("Fare amount is positive", function () {
+          const json = pm.response.json();
+          pm.expect(json.fareAmount).to.be.above(0);
+      });
