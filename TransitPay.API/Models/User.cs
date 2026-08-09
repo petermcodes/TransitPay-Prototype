@@ -32,6 +32,28 @@ public class User
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// The number of consecutive failed login attempts.
+    /// Reset to 0 on successful login. When it reaches the configured
+    /// MaxFailedAttempts threshold, LockoutEnd is set.
+    /// </summary>
+    [Column("failed_login_attempts")]
+    public int FailedLoginAttempts { get; set; } = 0;
+
+    /// <summary>
+    /// When the account lockout expires (UTC). Null if not locked out.
+    /// While LockoutEnd > DateTime.UtcNow, authentication is rejected.
+    /// </summary>
+    [Column("lockout_end")]
+    public DateTime? LockoutEnd { get; set; }
+
+    /// <summary>
+    /// When the password was last changed (UTC). Used for security auditing
+    /// and future password-expiration policies.
+    /// </summary>
+    [Column("password_changed_at")]
+    public DateTime? PasswordChangedAt { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -40,6 +62,9 @@ public class User
 
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
+
+    [Column("plate_number")]
+    public string? PlateNumber { get; set; }
 
     public Role? Role { get; set; }
     public ICollection<Card> Cards { get; set; } = new List<Card>();

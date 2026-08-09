@@ -1,3 +1,5 @@
+using TransitPay.API.Enums;
+
 namespace TransitPay.API.DTOs.Auth;
 
 public class LoginResponse
@@ -17,9 +19,10 @@ public class LoginData
 public class UserInfo
 {
     public int UserId { get; set; }
+    public string Username { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string MobileNumber { get; set; } = string.Empty;
     public int RoleId { get; set; }
-    public string? RoleName { get; set; }
+    public RoleName? RoleName { get; set; }
 }

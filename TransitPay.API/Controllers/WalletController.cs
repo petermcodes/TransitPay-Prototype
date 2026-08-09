@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Data;
 using TransitPay.API.Enums;
+using TransitPay.API.Services;
+using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
@@ -13,22 +15,50 @@ namespace TransitPay.API.Controllers;
 public class WalletController : ControllerBase
 {
     private readonly TransitPayDbContext _dbContext;
+    private readonly TransactionReferenceNumberGenerator _trnGenerator;
 
-    public WalletController(TransitPayDbContext dbContext)
+    public WalletController(TransitPayDbContext dbContext, TransactionReferenceNumberGenerator trnGenerator)
     {
         _dbContext = dbContext;
+        _trnGenerator = trnGenerator;
     }
 
     [HttpGet("{cardId}")]
     public async Task<IActionResult> GetWallet(int cardId)
     {
-        var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.CardId == cardId);
+        var userId = User.GetAuthenticatedUserId();
+        if (userId == null)
+        {
+            return Unauthorized(new { success = false, message = "User not authenticated." });
+        }
+
+        // Ownership validation: the card must belong to the authenticated user,
+        // or the user must be an Admin (who can view any wallet).
+        var isAdmin = User.IsInRole(nameof(Enums.RoleName.Admin));
+
+        var wallet = await _dbContext.Wallets
+            .Include(w => w.Card)
+            .FirstOrDefaultAsync(w => w.CardId == cardId);
+
         if (wallet == null)
         {
             return NotFound(new { success = false, message = "Wallet not found." });
         }
 
-        return Ok(new { success = true, message = "Wallet retrieved successfully.", data = wallet });
+        // Non-admin users may only access wallets of cards they own
+        if (!isAdmin && (wallet.Card == null || wallet.Card.UserId != userId.Value))
+        {
+            return NotFound(new { success = false, message = "Wallet not found." });
+        }
+
+        return Ok(new { success = true, message = "Wallet retrieved successfully.", data = new {
+            wallet.WalletId,
+            wallet.CardId,
+            wallet.Balance,
+            wallet.Status,
+            wallet.CreatedAt,
+            wallet.UpdatedAt
+        }});
     }
 
     [HttpPost("topup")]
@@ -48,12 +78,19 @@ public class WalletController : ControllerBase
 
         wallet.Balance += request.Amount;
         wallet.UpdatedAt = DateTime.UtcNow;
+
+        // Generate a Transaction Reference Number (TRN) for the top-up
+        var trn = await _trnGenerator.GenerateNextAsync();
+
         _dbContext.Transactions.Add(new Models.Transaction
         {
             CardId = request.CardId,
             Amount = request.Amount,
             TransactionType = TransactionType.TOP_UP,
             TransactionName = "Admin top-up",
+            TransactionReferenceNumber = trn,
+            RemainingBalance = wallet.Balance,
+            PaymentMode = request.PaymentMode ?? "Admin",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
@@ -70,4 +107,10 @@ public class TopUpRequest
 
     [Range(1, 100000, ErrorMessage = "Amount must be between 1 and 100,000.")]
     public decimal Amount { get; set; }
+
+    /// <summary>
+    /// The payment mode used for this top-up (e.g., "GCash", "PayMaya", "Bank Transfer", "Admin").
+    /// Defaults to "Admin" when not provided.
+    /// </summary>
+    public string? PaymentMode { get; set; }
 }

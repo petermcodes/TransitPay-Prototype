@@ -2,7 +2,7 @@ namespace TransitPay.API.Enums;
 
 public enum RoleName
 {
-    Passenger,
-    Driver,
-    Admin
+    Passenger = 1,
+    Driver = 2,
+    Admin = 3
 }

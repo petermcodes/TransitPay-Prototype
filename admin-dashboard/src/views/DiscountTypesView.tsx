@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Plus, Eye, Edit2, Trash2, CheckCircle, XCircle, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Search, Plus, Eye, Edit2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { adminService } from '../lib/admin'
 import { Btn, Chip } from '../AdminApp'
 import type { DiscountType } from '../lib/admin'

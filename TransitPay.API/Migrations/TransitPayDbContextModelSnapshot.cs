@@ -22,6 +22,47 @@ namespace TransitPay.API.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("TransitPay.API.Models.AuthAuditLog", b =>
+                {
+                    b.Property<long>("AuditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("audit_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("AuditId"));
+
+                    b.Property<string>("ActorHash")
+                        .HasColumnType("text")
+                        .HasColumnName("actor_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text")
+                        .HasColumnName("ip_address");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("AuditId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EventType");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("auth_audit_logs", (string)null);
+                });
+
             modelBuilder.Entity("TransitPay.API.Models.Card", b =>
                 {
                     b.Property<int>("CardId")
@@ -56,6 +97,13 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("passenger_type");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer")
                         .HasColumnName("status");
@@ -78,6 +126,204 @@ namespace TransitPay.API.Migrations
                     b.ToTable("cards", (string)null);
                 });
 
+            modelBuilder.Entity("TransitPay.API.Models.DiscountApplication", b =>
+                {
+                    b.Property<int>("DiscountApplicationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_application_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DiscountApplicationId"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<int?>("ApprovedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("approved_by");
+
+                    b.Property<int>("CardId")
+                        .HasColumnType("integer")
+                        .HasColumnName("card_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DiscountDocument")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("discount_document");
+
+                    b.Property<int?>("DiscountProgramId")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_program_id");
+
+                    b.Property<int>("DiscountTypeId")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_type_id");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("rejected_at");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("DiscountApplicationId");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("CardId");
+
+                    b.HasIndex("DiscountProgramId");
+
+                    b.HasIndex("DiscountTypeId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("discount_applications", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.DiscountProgram", b =>
+                {
+                    b.Property<int>("DiscountProgramId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_program_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DiscountProgramId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasColumnType("numeric")
+                        .HasColumnName("discount_percentage");
+
+                    b.Property<int?>("DiscountTypeId")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_type_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("RequiresApproval")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_approval");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("DiscountProgramId");
+
+                    b.HasIndex("DiscountTypeId");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("name IS NOT NULL AND name <> ''");
+
+                    b.ToTable("discount_programs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_discount_programs_discount_percentage_range", "\"discount_percentage\" >= 0 AND \"discount_percentage\" <= 100");
+                        });
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.DiscountType", b =>
+                {
+                    b.Property<int>("DiscountTypeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_type_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DiscountTypeId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasColumnType("numeric")
+                        .HasColumnName("discount_percentage");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("RequiresApproval")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_approval");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("DiscountTypeId");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("name IS NOT NULL AND name <> ''");
+
+                    b.ToTable("discount_types", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_discount_types_discount_percentage_range", "\"discount_percentage\" >= 0 AND \"discount_percentage\" <= 100");
+                        });
+                });
+
             modelBuilder.Entity("TransitPay.API.Models.FareRule", b =>
                 {
                     b.Property<int>("FareId")
@@ -95,9 +341,9 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
-                    b.Property<int>("DestinationStationId")
+                    b.Property<int>("DestinationTerminalId")
                         .HasColumnType("integer")
-                        .HasColumnName("destination_station_id");
+                        .HasColumnName("destination_terminal_id");
 
                     b.Property<DateTime>("EffectiveDate")
                         .HasColumnType("timestamp with time zone")
@@ -111,9 +357,9 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
-                    b.Property<int>("OriginStationId")
+                    b.Property<int>("OriginTerminalId")
                         .HasColumnType("integer")
-                        .HasColumnName("origin_station_id");
+                        .HasColumnName("origin_terminal_id");
 
                     b.Property<int>("PassengerType")
                         .HasColumnType("integer")
@@ -129,21 +375,418 @@ namespace TransitPay.API.Migrations
 
                     b.HasKey("FareId");
 
-                    b.HasIndex("DestinationStationId");
+                    b.HasIndex("DestinationTerminalId");
 
-                    b.HasIndex("OriginStationId", "DestinationStationId", "VehicleType", "PassengerType")
+                    b.HasIndex("OriginTerminalId", "DestinationTerminalId")
                         .IsUnique()
                         .HasFilter("is_active = true AND deleted_at IS NULL");
 
-                    b.ToTable("fare_rules", (string)null);
+                    b.ToTable("fare_rules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_fare_rules_fare_amount_non_negative", "\"fare_amount\" >= 0");
+                        });
                 });
 
-            modelBuilder.Entity("TransitPay.API.Models.PaymentSession", b =>
+            modelBuilder.Entity("TransitPay.API.Models.History.DriverDeleteHistory", b =>
                 {
-                    b.Property<Guid>("PaymentSessionId")
+                    b.Property<int>("HistoryId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("payment_session_id");
+                        .HasColumnType("integer")
+                        .HasColumnName("history_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("OriginalData")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("original_data");
+
+                    b.Property<int>("OriginalRecordId")
+                        .HasColumnType("integer")
+                        .HasColumnName("original_record_id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("Operation");
+
+                    b.HasIndex("OriginalRecordId");
+
+                    b.HasIndex("PerformedAt");
+
+                    b.ToTable("driver_delete_history", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.History.DriverEditHistory", b =>
+                {
+                    b.Property<int>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("history_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("OriginalData")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("original_data");
+
+                    b.Property<int>("OriginalRecordId")
+                        .HasColumnType("integer")
+                        .HasColumnName("original_record_id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("Operation");
+
+                    b.HasIndex("OriginalRecordId");
+
+                    b.HasIndex("PerformedAt");
+
+                    b.ToTable("driver_edit_history", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.History.FareMatrixDeleteHistory", b =>
+                {
+                    b.Property<int>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("history_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("OriginalData")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("original_data");
+
+                    b.Property<int>("OriginalRecordId")
+                        .HasColumnType("integer")
+                        .HasColumnName("original_record_id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("Operation");
+
+                    b.HasIndex("OriginalRecordId");
+
+                    b.HasIndex("PerformedAt");
+
+                    b.ToTable("fare_matrix_delete_history", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.History.FareMatrixEditHistory", b =>
+                {
+                    b.Property<int>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("history_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("OriginalData")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("original_data");
+
+                    b.Property<int>("OriginalRecordId")
+                        .HasColumnType("integer")
+                        .HasColumnName("original_record_id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("Operation");
+
+                    b.HasIndex("OriginalRecordId");
+
+                    b.HasIndex("PerformedAt");
+
+                    b.ToTable("fare_matrix_edit_history", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.History.PassengerDeleteHistory", b =>
+                {
+                    b.Property<int>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("history_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("OriginalData")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("original_data");
+
+                    b.Property<int>("OriginalRecordId")
+                        .HasColumnType("integer")
+                        .HasColumnName("original_record_id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("Operation");
+
+                    b.HasIndex("OriginalRecordId");
+
+                    b.HasIndex("PerformedAt");
+
+                    b.ToTable("passenger_delete_history", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.History.PassengerEditHistory", b =>
+                {
+                    b.Property<int>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("history_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("OriginalData")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("original_data");
+
+                    b.Property<int>("OriginalRecordId")
+                        .HasColumnType("integer")
+                        .HasColumnName("original_record_id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("Operation");
+
+                    b.HasIndex("OriginalRecordId");
+
+                    b.HasIndex("PerformedAt");
+
+                    b.ToTable("passenger_edit_history", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.History.TerminalDeleteHistory", b =>
+                {
+                    b.Property<int>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("history_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("OriginalData")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("original_data");
+
+                    b.Property<int>("OriginalRecordId")
+                        .HasColumnType("integer")
+                        .HasColumnName("original_record_id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("Operation");
+
+                    b.HasIndex("OriginalRecordId");
+
+                    b.HasIndex("PerformedAt");
+
+                    b.ToTable("terminal_delete_history", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.History.TerminalEditHistory", b =>
+                {
+                    b.Property<int>("HistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("history_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("HistoryId"));
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("OriginalData")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("original_data");
+
+                    b.Property<int>("OriginalRecordId")
+                        .HasColumnType("integer")
+                        .HasColumnName("original_record_id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<int>("PerformedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("performed_by_user_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("HistoryId");
+
+                    b.HasIndex("Operation");
+
+                    b.HasIndex("OriginalRecordId");
+
+                    b.HasIndex("PerformedAt");
+
+                    b.ToTable("terminal_edit_history", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.PassengerDiscount", b =>
+                {
+                    b.Property<int>("PassengerDiscountId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("passenger_discount_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PassengerDiscountId"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<int?>("ApprovedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("approved_by");
 
                     b.Property<int>("CardId")
                         .HasColumnType("integer")
@@ -153,21 +796,21 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<int>("DestinationStationId")
-                        .HasColumnType("integer")
-                        .HasColumnName("destination_station_id");
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
 
-                    b.Property<DateTime>("ExpiresAt")
+                    b.Property<decimal>("DiscountPercentage")
+                        .HasColumnType("numeric")
+                        .HasColumnName("discount_percentage");
+
+                    b.Property<int?>("DiscountProgramId")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_program_id");
+
+                    b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
-
-                    b.Property<decimal>("Fare")
-                        .HasColumnType("numeric")
-                        .HasColumnName("fare");
-
-                    b.Property<int>("OriginStationId")
-                        .HasColumnType("integer")
-                        .HasColumnName("origin_station_id");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer")
@@ -177,23 +820,19 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer")
-                        .HasColumnName("user_id");
+                    b.HasKey("PassengerDiscountId");
 
-                    b.HasKey("PaymentSessionId");
+                    b.HasIndex("ApprovedBy");
 
                     b.HasIndex("CardId")
                         .IsUnique()
-                        .HasFilter("status IN (0, 1, 2)");
+                        .HasFilter("status = 0");
 
-                    b.HasIndex("DestinationStationId");
+                    b.HasIndex("DiscountProgramId");
 
-                    b.HasIndex("OriginStationId");
+                    b.HasIndex("Status");
 
-                    b.HasIndex("UserId");
-
-                    b.ToTable("payment_sessions", (string)null);
+                    b.ToTable("passenger_discounts", (string)null);
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.QRCode", b =>
@@ -262,6 +901,10 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
+                    b.Property<int?>("ReplacedByTokenId")
+                        .HasColumnType("integer")
+                        .HasColumnName("replaced_by_token_id");
+
                     b.Property<bool>("Revoked")
                         .HasColumnType("boolean")
                         .HasColumnName("revoked");
@@ -277,7 +920,12 @@ namespace TransitPay.API.Migrations
 
                     b.HasKey("TokenId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Token");
 
                     b.ToTable("refresh_tokens", (string)null);
                 });
@@ -308,14 +956,14 @@ namespace TransitPay.API.Migrations
                     b.ToTable("roles", (string)null);
                 });
 
-            modelBuilder.Entity("TransitPay.API.Models.Station", b =>
+            modelBuilder.Entity("TransitPay.API.Models.Terminal", b =>
                 {
-                    b.Property<int>("StationId")
+                    b.Property<int>("TerminalId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
-                        .HasColumnName("station_id");
+                        .HasColumnName("terminal_id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("StationId"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TerminalId"));
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -329,59 +977,22 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
-                    b.Property<string>("StationName")
+                    b.Property<string>("TerminalName")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("station_name");
-
-                    b.Property<int>("TownId")
-                        .HasColumnType("integer")
-                        .HasColumnName("town_id");
+                        .HasColumnName("terminal_name");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.HasKey("StationId");
+                    b.HasKey("TerminalId");
 
-                    b.HasIndex("TownId");
+                    b.HasIndex("TerminalName")
+                        .IsUnique()
+                        .HasFilter("terminal_name IS NOT NULL AND terminal_name <> ''");
 
-                    b.ToTable("stations", (string)null);
-                });
-
-            modelBuilder.Entity("TransitPay.API.Models.Town", b =>
-                {
-                    b.Property<int>("TownId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("town_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TownId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("TownName")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("town_name");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("TownId");
-
-                    b.ToTable("towns", (string)null);
+                    b.ToTable("terminals", (string)null);
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.Transaction", b =>
@@ -409,6 +1020,23 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<string>("DestinationTerminalName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("destination_terminal_name");
+
+                    b.Property<decimal?>("DiscountAmount")
+                        .HasColumnType("numeric")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<decimal?>("DiscountPercentage")
+                        .HasColumnType("numeric")
+                        .HasColumnName("discount_percentage");
+
+                    b.Property<int?>("DiscountTypeId")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_type_id");
+
                     b.Property<int?>("DriverId")
                         .HasColumnType("integer")
                         .HasColumnName("driver_id");
@@ -417,25 +1045,55 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("fare_id");
 
-                    b.Property<int?>("OriginStationId")
-                        .HasColumnType("integer")
-                        .HasColumnName("origin_station_id");
+                    b.Property<decimal>("FinalFare")
+                        .HasColumnType("numeric")
+                        .HasColumnName("final_fare");
 
-                    b.Property<Guid?>("PaymentSessionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("payment_session_id");
+                    b.Property<int?>("OriginTerminalId")
+                        .HasColumnType("integer")
+                        .HasColumnName("origin_terminal_id");
+
+                    b.Property<string>("OriginTerminalName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("origin_terminal_name");
+
+                    b.Property<string>("PaymentMode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("payment_mode");
+
+                    b.Property<string>("PaymentRequestKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payment_request_key");
 
                     b.Property<string>("ReferenceNumber")
                         .HasColumnType("text")
                         .HasColumnName("reference_number");
 
-                    b.Property<int?>("StationId")
-                        .HasColumnType("integer")
-                        .HasColumnName("station_id");
+                    b.Property<decimal>("RegularFare")
+                        .HasColumnType("numeric")
+                        .HasColumnName("regular_fare");
+
+                    b.Property<decimal>("RemainingBalance")
+                        .HasColumnType("numeric")
+                        .HasColumnName("remaining_balance");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer")
                         .HasColumnName("status");
+
+                    b.Property<int?>("TerminalId")
+                        .HasColumnType("integer")
+                        .HasColumnName("terminal_id");
 
                     b.Property<string>("TransactionName")
                         .IsRequired()
@@ -462,23 +1120,49 @@ namespace TransitPay.API.Migrations
 
                     b.HasIndex("CardId");
 
+                    b.HasIndex("DiscountTypeId");
+
                     b.HasIndex("DriverId");
 
                     b.HasIndex("FareId");
 
-                    b.HasIndex("OriginStationId");
+                    b.HasIndex("OriginTerminalId");
 
-                    b.HasIndex("PaymentSessionId");
+                    b.HasIndex("PaymentRequestKey")
+                        .IsUnique()
+                        .HasFilter("payment_request_key IS NOT NULL AND status = 1");
 
-                    b.HasIndex("StationId");
+                    b.HasIndex("ReferenceNumber")
+                        .IsUnique()
+                        .HasFilter("reference_number IS NOT NULL AND reference_number <> ''");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TerminalId");
 
                     b.HasIndex("TransactionReferenceNumber")
                         .IsUnique()
                         .HasFilter("transaction_reference_number IS NOT NULL");
 
+                    b.HasIndex("TransactionType");
+
                     b.HasIndex("TripId");
 
-                    b.ToTable("transactions", (string)null);
+                    b.HasIndex("CardId", "CreatedAt")
+                        .IsDescending(false, true);
+
+                    b.ToTable("transactions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_transactions_amount_non_negative", "\"amount\" >= 0");
+
+                            t.HasCheckConstraint("CK_transactions_discount_amount_non_negative", "\"discount_amount\" IS NULL OR \"discount_amount\" >= 0");
+
+                            t.HasCheckConstraint("CK_transactions_discount_percentage_range", "\"discount_percentage\" IS NULL OR (\"discount_percentage\" >= 0 AND \"discount_percentage\" <= 100)");
+
+                            t.HasCheckConstraint("CK_transactions_final_fare_non_negative", "\"final_fare\" >= 0");
+
+                            t.HasCheckConstraint("CK_transactions_regular_fare_non_negative", "\"regular_fare\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.Trip", b =>
@@ -490,6 +1174,10 @@ namespace TransitPay.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TripId"));
 
+                    b.Property<DateTime?>("BoardingOriginUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("boarding_origin_updated_at");
+
                     b.Property<int?>("BusId")
                         .HasColumnType("integer")
                         .HasColumnName("bus_id");
@@ -497,6 +1185,10 @@ namespace TransitPay.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<int?>("CurrentBoardingOriginTerminalId")
+                        .HasColumnType("integer")
+                        .HasColumnName("current_boarding_origin_terminal_id");
 
                     b.Property<int>("DriverId")
                         .HasColumnType("integer")
@@ -506,13 +1198,13 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("ended_at");
 
-                    b.Property<int>("FinalDestinationStationId")
+                    b.Property<int?>("FinalDestinationTerminalId")
                         .HasColumnType("integer")
-                        .HasColumnName("final_destination_station_id");
+                        .HasColumnName("final_destination_terminal_id");
 
-                    b.Property<int>("OriginStationId")
+                    b.Property<int?>("OriginTerminalId")
                         .HasColumnType("integer")
-                        .HasColumnName("origin_station_id");
+                        .HasColumnName("origin_terminal_id");
 
                     b.Property<int>("PassengerCount")
                         .HasColumnType("integer")
@@ -522,6 +1214,13 @@ namespace TransitPay.API.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("route_name");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
 
                     b.Property<DateTime?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
@@ -541,15 +1240,101 @@ namespace TransitPay.API.Migrations
 
                     b.HasKey("TripId");
 
+                    b.HasIndex("CurrentBoardingOriginTerminalId");
+
                     b.HasIndex("DriverId")
                         .IsUnique()
                         .HasFilter("trip_status = 1");
 
-                    b.HasIndex("FinalDestinationStationId");
+                    b.HasIndex("EndedAt");
 
-                    b.HasIndex("OriginStationId");
+                    b.HasIndex("FinalDestinationTerminalId");
+
+                    b.HasIndex("OriginTerminalId");
+
+                    b.HasIndex("StartedAt");
+
+                    b.HasIndex("TripStatus");
+
+                    b.HasIndex("DriverId", "TripStatus");
 
                     b.ToTable("trips", (string)null);
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.TripPlan", b =>
+                {
+                    b.Property<int>("PlanId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("plan_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PlanId"));
+
+                    b.Property<int>("CardId")
+                        .HasColumnType("integer")
+                        .HasColumnName("card_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DestinationTerminalId")
+                        .HasColumnType("integer")
+                        .HasColumnName("destination_terminal_id");
+
+                    b.Property<decimal?>("DiscountAmount")
+                        .HasColumnType("numeric")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<decimal?>("DiscountPercentage")
+                        .HasColumnType("numeric")
+                        .HasColumnName("discount_percentage");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<decimal>("FinalFarePrice")
+                        .HasColumnType("numeric")
+                        .HasColumnName("final_fare_price");
+
+                    b.Property<decimal>("NormalFare")
+                        .HasColumnType("numeric")
+                        .HasColumnName("normal_fare");
+
+                    b.Property<int>("OriginTerminalId")
+                        .HasColumnType("integer")
+                        .HasColumnName("origin_terminal_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("PlanId");
+
+                    b.HasIndex("CardId");
+
+                    b.HasIndex("DestinationTerminalId");
+
+                    b.HasIndex("OriginTerminalId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("trip_plans", (string)null);
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.User", b =>
@@ -569,6 +1354,10 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_login_attempts");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasColumnType("text")
@@ -583,15 +1372,27 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("text")
                         .HasColumnName("last_name");
 
+                    b.Property<DateTime?>("LockoutEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lockout_end");
+
                     b.Property<string>("MobileNumber")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("mobile_number");
 
+                    b.Property<DateTime?>("PasswordChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("password_changed_at");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
+
+                    b.Property<string>("PlateNumber")
+                        .HasColumnType("text")
+                        .HasColumnName("plate_number");
 
                     b.Property<int>("RoleId")
                         .HasColumnType("integer")
@@ -612,6 +1413,9 @@ namespace TransitPay.API.Migrations
                         .IsUnique();
 
                     b.HasIndex("RoleId");
+
+                    b.HasIndex("Username")
+                        .IsUnique();
 
                     b.ToTable("users", (string)null);
                 });
@@ -641,6 +1445,13 @@ namespace TransitPay.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer")
                         .HasColumnName("status");
@@ -654,7 +1465,10 @@ namespace TransitPay.API.Migrations
                     b.HasIndex("CardId")
                         .IsUnique();
 
-                    b.ToTable("wallets", (string)null);
+                    b.ToTable("wallets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_wallets_balance_non_negative", "\"balance\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.Card", b =>
@@ -666,58 +1480,98 @@ namespace TransitPay.API.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("TransitPay.API.Models.FareRule", b =>
+            modelBuilder.Entity("TransitPay.API.Models.DiscountApplication", b =>
                 {
-                    b.HasOne("TransitPay.API.Models.Station", "DestinationStation")
+                    b.HasOne("TransitPay.API.Models.User", "ApprovedByUser")
                         .WithMany()
-                        .HasForeignKey("DestinationStationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("TransitPay.API.Models.Station", "OriginStation")
-                        .WithMany()
-                        .HasForeignKey("OriginStationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("DestinationStation");
-
-                    b.Navigation("OriginStation");
-                });
-
-            modelBuilder.Entity("TransitPay.API.Models.PaymentSession", b =>
-                {
                     b.HasOne("TransitPay.API.Models.Card", "Card")
                         .WithMany()
                         .HasForeignKey("CardId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("TransitPay.API.Models.Station", "DestinationStation")
-                        .WithMany()
-                        .HasForeignKey("DestinationStationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                    b.HasOne("TransitPay.API.Models.DiscountProgram", "DiscountProgram")
+                        .WithMany("DiscountApplications")
+                        .HasForeignKey("DiscountProgramId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("TransitPay.API.Models.Station", "OriginStation")
-                        .WithMany()
-                        .HasForeignKey("OriginStationId")
+                    b.HasOne("TransitPay.API.Models.DiscountType", "DiscountType")
+                        .WithMany("DiscountApplications")
+                        .HasForeignKey("DiscountTypeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("TransitPay.API.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ApprovedByUser");
 
                     b.Navigation("Card");
 
-                    b.Navigation("DestinationStation");
+                    b.Navigation("DiscountProgram");
 
-                    b.Navigation("OriginStation");
+                    b.Navigation("DiscountType");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.DiscountProgram", b =>
+                {
+                    b.HasOne("TransitPay.API.Models.DiscountType", "DiscountType")
+                        .WithMany()
+                        .HasForeignKey("DiscountTypeId");
+
+                    b.Navigation("DiscountType");
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.FareRule", b =>
+                {
+                    b.HasOne("TransitPay.API.Models.Terminal", "DestinationTerminal")
+                        .WithMany()
+                        .HasForeignKey("DestinationTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TransitPay.API.Models.Terminal", "OriginTerminal")
+                        .WithMany()
+                        .HasForeignKey("OriginTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DestinationTerminal");
+
+                    b.Navigation("OriginTerminal");
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.PassengerDiscount", b =>
+                {
+                    b.HasOne("TransitPay.API.Models.User", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TransitPay.API.Models.Card", "Card")
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TransitPay.API.Models.DiscountProgram", "DiscountProgram")
+                        .WithMany()
+                        .HasForeignKey("DiscountProgramId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ApprovedByUser");
+
+                    b.Navigation("Card");
+
+                    b.Navigation("DiscountProgram");
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.QRCode", b =>
@@ -742,22 +1596,17 @@ namespace TransitPay.API.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("TransitPay.API.Models.Station", b =>
-                {
-                    b.HasOne("TransitPay.API.Models.Town", "Town")
-                        .WithMany("Stations")
-                        .HasForeignKey("TownId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Town");
-                });
-
             modelBuilder.Entity("TransitPay.API.Models.Transaction", b =>
                 {
                     b.HasOne("TransitPay.API.Models.Card", "Card")
                         .WithMany("Transactions")
-                        .HasForeignKey("CardId");
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TransitPay.API.Models.DiscountType", "DiscountType")
+                        .WithMany()
+                        .HasForeignKey("DiscountTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TransitPay.API.Models.User", "Driver")
                         .WithMany()
@@ -768,19 +1617,14 @@ namespace TransitPay.API.Migrations
                         .WithMany()
                         .HasForeignKey("FareId");
 
-                    b.HasOne("TransitPay.API.Models.Station", "OriginStation")
+                    b.HasOne("TransitPay.API.Models.Terminal", "OriginTerminal")
                         .WithMany()
-                        .HasForeignKey("OriginStationId")
+                        .HasForeignKey("OriginTerminalId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("TransitPay.API.Models.PaymentSession", "PaymentSession")
+                    b.HasOne("TransitPay.API.Models.Terminal", "Terminal")
                         .WithMany()
-                        .HasForeignKey("PaymentSessionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("TransitPay.API.Models.Station", "Station")
-                        .WithMany("Transactions")
-                        .HasForeignKey("StationId")
+                        .HasForeignKey("TerminalId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("TransitPay.API.Models.Trip", "Trip")
@@ -790,44 +1634,84 @@ namespace TransitPay.API.Migrations
 
                     b.Navigation("Card");
 
+                    b.Navigation("DiscountType");
+
                     b.Navigation("Driver");
 
                     b.Navigation("FareRule");
 
-                    b.Navigation("OriginStation");
+                    b.Navigation("OriginTerminal");
 
-                    b.Navigation("PaymentSession");
-
-                    b.Navigation("Station");
+                    b.Navigation("Terminal");
 
                     b.Navigation("Trip");
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.Trip", b =>
                 {
+                    b.HasOne("TransitPay.API.Models.Terminal", "CurrentBoardingOriginTerminal")
+                        .WithMany()
+                        .HasForeignKey("CurrentBoardingOriginTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TransitPay.API.Models.User", "Driver")
                         .WithMany()
                         .HasForeignKey("DriverId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("TransitPay.API.Models.Station", "FinalDestinationStation")
+                    b.HasOne("TransitPay.API.Models.Terminal", "FinalDestinationTerminal")
                         .WithMany()
-                        .HasForeignKey("FinalDestinationStationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .HasForeignKey("FinalDestinationTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("TransitPay.API.Models.Station", "OriginStation")
+                    b.HasOne("TransitPay.API.Models.Terminal", "OriginTerminal")
                         .WithMany()
-                        .HasForeignKey("OriginStationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .HasForeignKey("OriginTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CurrentBoardingOriginTerminal");
 
                     b.Navigation("Driver");
 
-                    b.Navigation("FinalDestinationStation");
+                    b.Navigation("FinalDestinationTerminal");
 
-                    b.Navigation("OriginStation");
+                    b.Navigation("OriginTerminal");
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.TripPlan", b =>
+                {
+                    b.HasOne("TransitPay.API.Models.Card", "Card")
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TransitPay.API.Models.Terminal", "DestinationTerminal")
+                        .WithMany()
+                        .HasForeignKey("DestinationTerminalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TransitPay.API.Models.Terminal", "OriginTerminal")
+                        .WithMany()
+                        .HasForeignKey("OriginTerminalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TransitPay.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Card");
+
+                    b.Navigation("DestinationTerminal");
+
+                    b.Navigation("OriginTerminal");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.User", b =>
@@ -835,7 +1719,7 @@ namespace TransitPay.API.Migrations
                     b.HasOne("TransitPay.API.Models.Role", "Role")
                         .WithMany("Users")
                         .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Role");
@@ -861,19 +1745,19 @@ namespace TransitPay.API.Migrations
                     b.Navigation("Wallet");
                 });
 
+            modelBuilder.Entity("TransitPay.API.Models.DiscountProgram", b =>
+                {
+                    b.Navigation("DiscountApplications");
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.DiscountType", b =>
+                {
+                    b.Navigation("DiscountApplications");
+                });
+
             modelBuilder.Entity("TransitPay.API.Models.Role", b =>
                 {
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("TransitPay.API.Models.Station", b =>
-                {
-                    b.Navigation("Transactions");
-                });
-
-            modelBuilder.Entity("TransitPay.API.Models.Town", b =>
-                {
-                    b.Navigation("Stations");
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.Trip", b =>

@@ -11,11 +11,11 @@ public class PaymentRequest
     [Required(ErrorMessage = "Card ID is required.")]
     public int CardId { get; set; }
 
-    [Required(ErrorMessage = "Origin station ID is required.")]
-    public int OriginStationId { get; set; }
+    [Required(ErrorMessage = "Origin terminal ID is required.")]
+    public int OriginTerminalId { get; set; }
 
-    [Required(ErrorMessage = "Destination station ID is required.")]
-    public int DestinationStationId { get; set; }
+    [Required(ErrorMessage = "Destination terminal ID is required.")]
+    public int DestinationTerminalId { get; set; }
 
     // Note: Amount field REMOVED for security - server always determines fare from FareRules table
 }

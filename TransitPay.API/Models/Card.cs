@@ -43,6 +43,16 @@ public class Card
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 
+    /// <summary>
+    /// EF Core optimistic concurrency token.
+    /// Configured via the [Timestamp] attribute — automatically included in
+    /// UPDATE WHERE clauses to prevent lost updates. Not exposed in DTOs to
+    /// preserve the exact legacy serialized response.
+    /// </summary>
+    [Timestamp]
+    [Column("row_version")]
+    public byte[] RowVersion { get; set; } = [];
+
     public User? User { get; set; }
     public Wallet? Wallet { get; set; }
     public QRCode? QRCode { get; set; }

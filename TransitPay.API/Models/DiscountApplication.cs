@@ -22,11 +22,26 @@ public class DiscountApplication
     public int CardId { get; set; }
 
     /// <summary>
+    /// The user (passenger) who submitted this application.
+    /// </summary>
+    [ForeignKey(nameof(User))]
+    [Column("user_id")]
+    public int UserId { get; set; }
+
+    /// <summary>
     /// The discount type being applied for.
     /// </summary>
     [ForeignKey(nameof(DiscountType))]
     [Column("discount_type_id")]
     public int DiscountTypeId { get; set; }
+
+    /// <summary>
+    /// The discount program this application belongs to (if any).
+    /// Links the application to a discount program definition.
+    /// </summary>
+    [ForeignKey(nameof(DiscountProgram))]
+    [Column("discount_program_id")]
+    public int? DiscountProgramId { get; set; }
 
     /// <summary>
     /// Current status of the application.
@@ -80,7 +95,9 @@ public class DiscountApplication
     // Navigation properties
     public Card? Card { get; set; }
     public DiscountType? DiscountType { get; set; }
+    public DiscountProgram? DiscountProgram { get; set; }
     public User? ApprovedByUser { get; set; }
+    public User? User { get; set; }
 }
 
 /// <summary>

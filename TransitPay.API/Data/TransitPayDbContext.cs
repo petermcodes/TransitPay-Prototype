@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Enums;
 using TransitPay.API.Models;
+using TransitPay.API.Models.History;
 
 namespace TransitPay.API.Data;
 
@@ -14,17 +15,27 @@ public class TransitPayDbContext : DbContext
     public DbSet<Role> Roles { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<Card> Cards { get; set; }
-    public DbSet<Town> Towns { get; set; }
-    public DbSet<Station> Stations { get; set; }
+    public DbSet<Terminal> Terminals { get; set; }
     public DbSet<Wallet> Wallets { get; set; }
     public DbSet<Transaction> Transactions { get; set; }
     public DbSet<FareRule> FareRules { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<QRCode> QRCodes { get; set; }
-    public DbSet<PaymentSession> PaymentSessions { get; set; }
     public DbSet<Trip> Trips { get; set; }
+    public DbSet<TripPlan> TripPlans { get; set; }
     public DbSet<DiscountType> DiscountTypes { get; set; }
     public DbSet<DiscountApplication> DiscountApplications { get; set; }
+    public DbSet<DiscountProgram> DiscountPrograms { get; set; }
+    public DbSet<PassengerDiscount> PassengerDiscounts { get; set; }
+    public DbSet<AuthAuditLog> AuthAuditLogs { get; set; }
+    public DbSet<PassengerEditHistory> PassengerEditHistories { get; set; }
+    public DbSet<PassengerDeleteHistory> PassengerDeleteHistories { get; set; }
+    public DbSet<DriverEditHistory> DriverEditHistories { get; set; }
+    public DbSet<DriverDeleteHistory> DriverDeleteHistories { get; set; }
+    public DbSet<TerminalEditHistory> TerminalEditHistories { get; set; }
+    public DbSet<TerminalDeleteHistory> TerminalDeleteHistories { get; set; }
+    public DbSet<FareMatrixEditHistory> FareMatrixEditHistories { get; set; }
+    public DbSet<FareMatrixDeleteHistory> FareMatrixDeleteHistories { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -34,23 +45,103 @@ public class TransitPayDbContext : DbContext
         modelBuilder.Entity<User>().ToTable("users");
         modelBuilder.Entity<Role>().ToTable("roles");
         modelBuilder.Entity<Card>().ToTable("cards");
-        modelBuilder.Entity<Town>().ToTable("towns");
-        modelBuilder.Entity<Station>().ToTable("stations");
+        modelBuilder.Entity<Terminal>().ToTable("terminals");
         modelBuilder.Entity<Wallet>().ToTable("wallets");
         modelBuilder.Entity<Transaction>().ToTable("transactions");
         modelBuilder.Entity<FareRule>().ToTable("fare_rules");
         modelBuilder.Entity<RefreshToken>().ToTable("refresh_tokens");
         modelBuilder.Entity<QRCode>().ToTable("qr_codes");
-        modelBuilder.Entity<PaymentSession>().ToTable("payment_sessions");
         modelBuilder.Entity<Trip>().ToTable("trips");
+        modelBuilder.Entity<TripPlan>().ToTable("trip_plans");
         modelBuilder.Entity<DiscountType>().ToTable("discount_types");
         modelBuilder.Entity<DiscountApplication>().ToTable("discount_applications");
+        modelBuilder.Entity<DiscountProgram>().ToTable("discount_programs");
+        modelBuilder.Entity<PassengerDiscount>().ToTable("passenger_discounts");
+        modelBuilder.Entity<AuthAuditLog>().ToTable("auth_audit_logs");
+        modelBuilder.Entity<PassengerEditHistory>().ToTable("passenger_edit_history");
+        modelBuilder.Entity<PassengerDeleteHistory>().ToTable("passenger_delete_history");
+        modelBuilder.Entity<DriverEditHistory>().ToTable("driver_edit_history");
+        modelBuilder.Entity<DriverDeleteHistory>().ToTable("driver_delete_history");
+        modelBuilder.Entity<TerminalEditHistory>().ToTable("terminal_edit_history");
+        modelBuilder.Entity<TerminalDeleteHistory>().ToTable("terminal_delete_history");
+        modelBuilder.Entity<FareMatrixEditHistory>().ToTable("fare_matrix_edit_history");
+        modelBuilder.Entity<FareMatrixDeleteHistory>().ToTable("fare_matrix_delete_history");
+
+        modelBuilder.Entity<Wallet>().Property(w => w.RowVersion).IsRowVersion();
+        modelBuilder.Entity<Trip>().Property(t => t.RowVersion).IsRowVersion();
+        modelBuilder.Entity<Transaction>().Property(t => t.RowVersion).IsRowVersion();
+
+        // ── Database integrity CHECK constraints ────────────────────────
+        modelBuilder.Entity<Wallet>()
+            .HasCheckConstraint("CK_wallets_balance_non_negative", "\"balance\" >= 0");
+
+        modelBuilder.Entity<FareRule>()
+            .HasCheckConstraint("CK_fare_rules_fare_amount_non_negative", "\"fare_amount\" >= 0");
+
+        modelBuilder.Entity<Transaction>()
+            .HasCheckConstraint("CK_transactions_amount_non_negative", "\"amount\" >= 0");
+
+        modelBuilder.Entity<Transaction>()
+            .HasCheckConstraint("CK_transactions_final_fare_non_negative", "\"final_fare\" >= 0");
+
+        modelBuilder.Entity<Transaction>()
+            .HasCheckConstraint("CK_transactions_regular_fare_non_negative", "\"regular_fare\" >= 0");
+
+        modelBuilder.Entity<Transaction>()
+            .HasCheckConstraint("CK_transactions_discount_amount_non_negative", "\"discount_amount\" IS NULL OR \"discount_amount\" >= 0");
+
+        modelBuilder.Entity<Transaction>()
+            .HasCheckConstraint("CK_transactions_discount_percentage_range", "\"discount_percentage\" IS NULL OR (\"discount_percentage\" >= 0 AND \"discount_percentage\" <= 100)");
+
+        modelBuilder.Entity<DiscountType>()
+            .HasCheckConstraint("CK_discount_types_discount_percentage_range", "\"discount_percentage\" >= 0 AND \"discount_percentage\" <= 100");
+
+        modelBuilder.Entity<DiscountProgram>()
+            .HasCheckConstraint("CK_discount_programs_discount_percentage_range", "\"discount_percentage\" >= 0 AND \"discount_percentage\" <= 100");
+
+        // ── Soft delete query filters ───────────────────────────────────
+        modelBuilder.Entity<Card>().HasQueryFilter(c => c.DeletedAt == null);
+        modelBuilder.Entity<User>().HasQueryFilter(u => u.DeletedAt == null);
+        modelBuilder.Entity<Terminal>().HasQueryFilter(t => t.DeletedAt == null);
+        modelBuilder.Entity<Wallet>().HasQueryFilter(w => w.DeletedAt == null);
+        modelBuilder.Entity<Transaction>().HasQueryFilter(t => t.DeletedAt == null);
+        modelBuilder.Entity<FareRule>().HasQueryFilter(fr => fr.DeletedAt == null);
+        modelBuilder.Entity<DiscountType>().HasQueryFilter(dt => dt.DeletedAt == null);
+        modelBuilder.Entity<DiscountApplication>().HasQueryFilter(da => da.DeletedAt == null);
+        modelBuilder.Entity<DiscountProgram>().HasQueryFilter(dp => dp.DeletedAt == null);
+        modelBuilder.Entity<PassengerDiscount>().HasQueryFilter(pd => pd.DeletedAt == null);
 
         // ── Discount Type relationships ──────────────────────────────────
         modelBuilder.Entity<DiscountType>()
             .HasMany(dt => dt.DiscountApplications)
             .WithOne(da => da.DiscountType)
             .HasForeignKey(da => da.DiscountTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ── Discount Program relationships ────────────────────────────────
+        modelBuilder.Entity<DiscountProgram>()
+            .HasMany(dp => dp.DiscountApplications)
+            .WithOne(da => da.DiscountProgram)
+            .HasForeignKey(da => da.DiscountProgramId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ── Passenger Discount relationships ─────────────────────────────
+        modelBuilder.Entity<PassengerDiscount>()
+            .HasOne(pd => pd.Card)
+            .WithMany()
+            .HasForeignKey(pd => pd.CardId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PassengerDiscount>()
+            .HasOne(pd => pd.DiscountProgram)
+            .WithMany()
+            .HasForeignKey(pd => pd.DiscountProgramId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PassengerDiscount>()
+            .HasOne(pd => pd.ApprovedByUser)
+            .WithMany()
+            .HasForeignKey(pd => pd.ApprovedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
         // ── Discount Application relationships ───────────────────────────
@@ -64,6 +155,13 @@ public class TransitPayDbContext : DbContext
             .HasOne(da => da.ApprovedByUser)
             .WithMany()
             .HasForeignKey(da => da.ApprovedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ── User / Role relationships ───────────────────────────────────
+        modelBuilder.Entity<User>()
+            .HasOne(u => u.Role)
+            .WithMany(r => r.Users)
+            .HasForeignKey(u => u.RoleId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // ── QR Code constraints ──────────────────────────────────────────
@@ -91,87 +189,79 @@ public class TransitPayDbContext : DbContext
             .HasIndex(u => u.MobileNumber)
             .IsUnique();
 
+        // Username lookup is a hot auth and account lookup path; make it unique and indexed.
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Username)
+            .IsUnique();
+
+        // Business identifier uniqueness on master data names.
+        modelBuilder.Entity<DiscountType>()
+            .HasIndex(dt => dt.Name)
+            .IsUnique()
+            .HasFilter("name IS NOT NULL AND name <> ''");
+
+        modelBuilder.Entity<DiscountProgram>()
+            .HasIndex(dp => dp.Name)
+            .IsUnique()
+            .HasFilter("name IS NOT NULL AND name <> ''");
+
+        modelBuilder.Entity<Terminal>()
+            .HasIndex(t => t.TerminalName)
+            .IsUnique()
+            .HasFilter("terminal_name IS NOT NULL AND terminal_name <> ''");
+
         // ── FareRule constraints & relationships ──────────────────────────
         // Unique constraint to prevent duplicate fare rules for the same route
         modelBuilder.Entity<FareRule>()
             .HasIndex(fr => new
             {
-                fr.OriginStationId,
-                fr.DestinationStationId,
-                fr.VehicleType,
-                fr.PassengerType
+                fr.OriginTerminalId,
+                fr.DestinationTerminalId
             })
             .IsUnique()
             .HasFilter("is_active = true AND deleted_at IS NULL");
 
-        // FareRule has two FKs to Station (origin and destination)
+        // FareRule has two FKs to Terminal (origin and destination)
         // These must be configured explicitly so EF Core can distinguish them.
         modelBuilder.Entity<FareRule>()
-            .HasOne(fr => fr.OriginStation)
+            .HasOne(fr => fr.OriginTerminal)
             .WithMany()
-            .HasForeignKey(fr => fr.OriginStationId)
+            .HasForeignKey(fr => fr.OriginTerminalId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<FareRule>()
-            .HasOne(fr => fr.DestinationStation)
+            .HasOne(fr => fr.DestinationTerminal)
             .WithMany()
-            .HasForeignKey(fr => fr.DestinationStationId)
+            .HasForeignKey(fr => fr.DestinationTerminalId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        // ── PaymentSession relationships ─────────────────────────────────
-        // PaymentSession has two FKs to Station (origin and destination)
-        modelBuilder.Entity<PaymentSession>()
-            .HasOne(ps => ps.OriginStation)
-            .WithMany()
-            .HasForeignKey(ps => ps.OriginStationId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<PaymentSession>()
-            .HasOne(ps => ps.DestinationStation)
-            .WithMany()
-            .HasForeignKey(ps => ps.DestinationStationId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<PaymentSession>()
-            .HasOne(ps => ps.Card)
-            .WithMany()
-            .HasForeignKey(ps => ps.CardId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<PaymentSession>()
-            .HasOne(ps => ps.User)
-            .WithMany()
-            .HasForeignKey(ps => ps.UserId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // Filtered unique index: only one active session (PENDING/SCANNING/PROCESSING) per card
-        // Status enum values: PENDING=0, SCANNING=1, PROCESSING=2
-        modelBuilder.Entity<PaymentSession>()
-            .HasIndex(ps => ps.CardId)
-            .IsUnique()
-            .HasFilter("status IN (0, 1, 2)");
 
         // ── Transaction relationships ─────────────────────────────────────
-        // The Transaction has two FKs to Station:
-        //   - StationId (destination, via Station nav property)
-        //   - OriginStationId (origin, via OriginStation nav property)
+        // The Transaction has two FKs to Terminal:
+        //   - TerminalId (destination, via Terminal nav property)
+        //   - OriginTerminalId (origin, via OriginTerminal nav property)
         // These must be configured explicitly so EF Core can distinguish them.
         modelBuilder.Entity<Transaction>()
-            .HasOne(t => t.Station)
-            .WithMany(s => s.Transactions)
-            .HasForeignKey(t => t.StationId)
+            .HasOne(t => t.Card)
+            .WithMany(c => c.Transactions)
+            .HasForeignKey(t => t.CardId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Transaction>()
-            .HasOne(t => t.OriginStation)
-            .WithMany() // No inverse navigation on Station for origin transactions
-            .HasForeignKey(t => t.OriginStationId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<Transaction>()
-            .HasOne(t => t.PaymentSession)
+            .HasOne(t => t.DiscountType)
             .WithMany()
-            .HasForeignKey(t => t.PaymentSessionId)
+            .HasForeignKey(t => t.DiscountTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Transaction>()
+            .HasOne(t => t.Terminal)
+            .WithMany()
+            .HasForeignKey(t => t.TerminalId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Transaction>()
+            .HasOne(t => t.OriginTerminal)
+            .WithMany() // No inverse navigation on Terminal for origin transactions
+            .HasForeignKey(t => t.OriginTerminalId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Transaction>()
@@ -187,7 +277,7 @@ public class TransitPayDbContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         // ── Trip relationships ────────────────────────────────────────────
-        // Trip has two FKs to Station (origin and final destination)
+        // Trip has two FKs to Terminal (origin and final destination)
         modelBuilder.Entity<Trip>()
             .HasOne(t => t.Driver)
             .WithMany()
@@ -195,21 +285,44 @@ public class TransitPayDbContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Trip>()
-            .HasOne(t => t.OriginStation)
+            .HasOne(t => t.OriginTerminal)
             .WithMany()
-            .HasForeignKey(t => t.OriginStationId)
+            .HasForeignKey(t => t.OriginTerminalId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Trip>()
-            .HasOne(t => t.FinalDestinationStation)
+            .HasOne(t => t.FinalDestinationTerminal)
             .WithMany()
-            .HasForeignKey(t => t.FinalDestinationStationId)
+            .HasForeignKey(t => t.FinalDestinationTerminalId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Trip>()
+            .HasOne(t => t.CurrentBoardingOriginTerminal)
+            .WithMany()
+            .HasForeignKey(t => t.CurrentBoardingOriginTerminalId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // ── Trip indexes ──────────────────────────────────────────────────
         // Index on driver_id for fast trip lookups by driver
         modelBuilder.Entity<Trip>()
             .HasIndex(t => t.DriverId);
+
+        // Index on current boarding origin terminal for fast lookups by boarding terminal
+        modelBuilder.Entity<Trip>()
+            .HasIndex(t => t.CurrentBoardingOriginTerminalId);
+
+        // Composite lookup for the hot active-trip check: driver_id + trip_status
+        modelBuilder.Entity<Trip>()
+            .HasIndex(t => new { t.DriverId, t.TripStatus });
+
+        modelBuilder.Entity<Trip>()
+            .HasIndex(t => t.TripStatus);
+
+        modelBuilder.Entity<Trip>()
+            .HasIndex(t => t.StartedAt);
+
+        modelBuilder.Entity<Trip>()
+            .HasIndex(t => t.EndedAt);
 
         // Filtered unique index: only one ACTIVE trip per conductor/driver
         // TripStatus enum values: Pending=0, Active=1, Completed=2, Cancelled=3
@@ -222,6 +335,20 @@ public class TransitPayDbContext : DbContext
         // Index on card_id for fast transaction lookups by card
         modelBuilder.Entity<Transaction>()
             .HasIndex(t => t.CardId);
+
+        // Hot pagination path in the transaction controller: card_id + created_at DESC
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => new { t.CardId, t.CreatedAt })
+            .IsDescending(false, true);
+
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.TransactionType);
+
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.Status);
+
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.DiscountTypeId);
 
         // Index on trip_id for fast transaction lookups by trip
         modelBuilder.Entity<Transaction>()
@@ -237,10 +364,134 @@ public class TransitPayDbContext : DbContext
             .IsUnique()
             .HasFilter("transaction_reference_number IS NOT NULL");
 
+        // Unique index on PaymentRequestKey for COMPLETED transactions only.
+        // This is the hard idempotency guarantee — a duplicate scan/charge event
+        // for the same trip/card/origin/destination is rejected at the DB level.
+        // TransactionStatus enum values: PENDING=0, COMPLETED=1, FAILED=2, CANCELLED=3
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.PaymentRequestKey)
+            .IsUnique()
+            .HasFilter("payment_request_key IS NOT NULL AND status = 1");
+
+        // Receipts and legacy customer-facing references must remain unique for the non-empty business value.
+        modelBuilder.Entity<Transaction>()
+            .HasIndex(t => t.ReferenceNumber)
+            .IsUnique()
+            .HasFilter("reference_number IS NOT NULL AND reference_number <> ''");
+
+        // ── DiscountApplication indexes ───────────────────────────────────
+        modelBuilder.Entity<DiscountApplication>()
+            .HasIndex(da => da.CardId);
+
+        modelBuilder.Entity<DiscountApplication>()
+            .HasIndex(da => da.DiscountTypeId);
+
+        modelBuilder.Entity<DiscountApplication>()
+            .HasIndex(da => da.Status);
+
+        modelBuilder.Entity<DiscountApplication>()
+            .HasIndex(da => da.DiscountProgramId);
+
+        // ── PassengerDiscount indexes ─────────────────────────────────────
+        modelBuilder.Entity<PassengerDiscount>()
+            .HasIndex(pd => pd.CardId);
+
+        modelBuilder.Entity<PassengerDiscount>()
+            .HasIndex(pd => pd.DiscountProgramId);
+
+        modelBuilder.Entity<PassengerDiscount>()
+            .HasIndex(pd => pd.Status);
+
+        // Filtered unique index: only one ACTIVE passenger discount per card.
+        // PassengerDiscountStatus enum values: Active=0, Expired=1, Revoked=2
+        modelBuilder.Entity<PassengerDiscount>()
+            .HasIndex(pd => pd.CardId)
+            .IsUnique()
+            .HasFilter("status = 0");
+
+        // ── AuthAuditLog indexes ──────────────────────────────────────────
+        modelBuilder.Entity<AuthAuditLog>()
+            .HasIndex(al => al.UserId);
+
+        modelBuilder.Entity<AuthAuditLog>()
+            .HasIndex(al => al.EventType);
+
+        modelBuilder.Entity<AuthAuditLog>()
+            .HasIndex(al => al.CreatedAt);
+
+        // ── RefreshToken indexes ──────────────────────────────────────────
+        modelBuilder.Entity<RefreshToken>()
+            .HasIndex(rt => rt.Token)
+            .IsUnique();
+
+        modelBuilder.Entity<RefreshToken>()
+            .HasIndex(rt => new { rt.UserId, rt.Token });
+
+        modelBuilder.Entity<RefreshToken>()
+            .HasIndex(rt => rt.ExpiresAt);
+
         // ── Wallet constraints ────────────────────────────────────────────
         // One wallet per card (unique constraint)
         modelBuilder.Entity<Wallet>()
             .HasIndex(w => w.CardId)
             .IsUnique();
+
+        // ── History table indexes ─────────────────────────────────────────
+        modelBuilder.Entity<PassengerEditHistory>()
+            .HasIndex(h => h.OriginalRecordId);
+        modelBuilder.Entity<PassengerEditHistory>()
+            .HasIndex(h => h.PerformedAt);
+        modelBuilder.Entity<PassengerEditHistory>()
+            .HasIndex(h => h.Operation);
+
+        modelBuilder.Entity<PassengerDeleteHistory>()
+            .HasIndex(h => h.OriginalRecordId);
+        modelBuilder.Entity<PassengerDeleteHistory>()
+            .HasIndex(h => h.PerformedAt);
+        modelBuilder.Entity<PassengerDeleteHistory>()
+            .HasIndex(h => h.Operation);
+
+        modelBuilder.Entity<DriverEditHistory>()
+            .HasIndex(h => h.OriginalRecordId);
+        modelBuilder.Entity<DriverEditHistory>()
+            .HasIndex(h => h.PerformedAt);
+        modelBuilder.Entity<DriverEditHistory>()
+            .HasIndex(h => h.Operation);
+
+        modelBuilder.Entity<DriverDeleteHistory>()
+            .HasIndex(h => h.OriginalRecordId);
+        modelBuilder.Entity<DriverDeleteHistory>()
+            .HasIndex(h => h.PerformedAt);
+        modelBuilder.Entity<DriverDeleteHistory>()
+            .HasIndex(h => h.Operation);
+
+        modelBuilder.Entity<TerminalEditHistory>()
+            .HasIndex(h => h.OriginalRecordId);
+        modelBuilder.Entity<TerminalEditHistory>()
+            .HasIndex(h => h.PerformedAt);
+        modelBuilder.Entity<TerminalEditHistory>()
+            .HasIndex(h => h.Operation);
+
+        modelBuilder.Entity<TerminalDeleteHistory>()
+            .HasIndex(h => h.OriginalRecordId);
+        modelBuilder.Entity<TerminalDeleteHistory>()
+            .HasIndex(h => h.PerformedAt);
+        modelBuilder.Entity<TerminalDeleteHistory>()
+            .HasIndex(h => h.Operation);
+
+
+        modelBuilder.Entity<FareMatrixEditHistory>()
+            .HasIndex(h => h.OriginalRecordId);
+        modelBuilder.Entity<FareMatrixEditHistory>()
+            .HasIndex(h => h.PerformedAt);
+        modelBuilder.Entity<FareMatrixEditHistory>()
+            .HasIndex(h => h.Operation);
+
+        modelBuilder.Entity<FareMatrixDeleteHistory>()
+            .HasIndex(h => h.OriginalRecordId);
+        modelBuilder.Entity<FareMatrixDeleteHistory>()
+            .HasIndex(h => h.PerformedAt);
+        modelBuilder.Entity<FareMatrixDeleteHistory>()
+            .HasIndex(h => h.Operation);
     }
 }

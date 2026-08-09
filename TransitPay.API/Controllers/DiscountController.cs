@@ -1,22 +1,28 @@
 using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TransitPay.API.Data;
+using TransitPay.API.Enums;
 using TransitPay.API.Interfaces;
 using TransitPay.API.Models;
+using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class DiscountController : ControllerBase
 {
     private readonly IDiscountService _discountService;
+    private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<DiscountController> _logger;
 
-    public DiscountController(IDiscountService discountService, ILogger<DiscountController> logger)
+    public DiscountController(IDiscountService discountService, TransitPayDbContext dbContext, ILogger<DiscountController> logger)
     {
         _discountService = discountService;
+        _dbContext = dbContext;
         _logger = logger;
     }
 
@@ -202,10 +208,10 @@ public class DiscountController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves all discount types (Admin only).
+    /// Retrieves all active discount types (available to all authenticated users).
     /// </summary>
     [HttpGet("types")]
-    [Authorize(Roles = "Admin")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAllDiscountTypes()
     {
         try
@@ -218,14 +224,14 @@ public class DiscountController : ControllerBase
                 message = "Discount types retrieved successfully.",
                 data = discountTypes.Select(dt => new
                 {
-                    dt.DiscountTypeId,
-                    dt.Name,
-                    dt.Description,
-                    dt.DiscountPercentage,
-                    dt.IsActive,
-                    dt.RequiresApproval,
-                    dt.CreatedAt,
-                    dt.UpdatedAt
+                    discountTypeId = dt.DiscountTypeId,
+                    name = dt.Name,
+                    description = dt.Description,
+                    discountPercentage = dt.DiscountPercentage,
+                    isActive = dt.IsActive,
+                    requiresApproval = dt.RequiresApproval,
+                    createdAt = dt.CreatedAt,
+                    updatedAt = dt.UpdatedAt
                 })
             });
         }
@@ -258,14 +264,14 @@ public class DiscountController : ControllerBase
                 message = "Discount type retrieved successfully.",
                 data = new
                 {
-                    discountType.DiscountTypeId,
-                    discountType.Name,
-                    discountType.Description,
-                    discountType.DiscountPercentage,
-                    discountType.IsActive,
-                    discountType.RequiresApproval,
-                    discountType.CreatedAt,
-                    discountType.UpdatedAt
+                    discountTypeId = discountType.DiscountTypeId,
+                    name = discountType.Name,
+                    description = discountType.Description,
+                    discountPercentage = discountType.DiscountPercentage,
+                    isActive = discountType.IsActive,
+                    requiresApproval = discountType.RequiresApproval,
+                    createdAt = discountType.CreatedAt,
+                    updatedAt = discountType.UpdatedAt
                 }
             });
         }
@@ -273,6 +279,315 @@ public class DiscountController : ControllerBase
         {
             _logger.LogError(ex, "Error retrieving discount type {DiscountTypeId}", discountTypeId);
             return StatusCode(500, new { success = false, message = "An error occurred while retrieving the discount type." });
+        }
+    }
+
+    #endregion
+
+    #region Discount Program Management (Admin)
+
+    /// <summary>
+    /// Creates a new discount program (Admin only).
+    /// </summary>
+    [HttpPost("programs")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> CreateDiscountProgram([FromBody] CreateDiscountProgramRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+        }
+
+        try
+        {
+            var discountProgram = new DiscountProgram
+            {
+                Name = request.Name,
+                Description = request.Description,
+                DiscountPercentage = request.DiscountPercentage,
+                RequiresApproval = request.RequiresApproval
+            };
+
+            var created = await _discountService.CreateDiscountProgramAsync(discountProgram);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Discount program created successfully.",
+                data = new
+                {
+                    created.DiscountProgramId,
+                    created.Name,
+                    created.Description,
+                    created.DiscountPercentage,
+                    created.IsActive,
+                    created.RequiresApproval,
+                    created.CreatedAt
+                }
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to create discount program: {Message}", ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating discount program");
+            return StatusCode(500, new { success = false, message = "An error occurred while creating the discount program." });
+        }
+    }
+
+    /// <summary>
+    /// Updates an existing discount program (Admin only).
+    /// </summary>
+    [HttpPut("programs/{discountProgramId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateDiscountProgram(int discountProgramId, [FromBody] UpdateDiscountProgramRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+        }
+
+        try
+        {
+            var discountProgram = new DiscountProgram
+            {
+                Name = request.Name,
+                Description = request.Description,
+                DiscountPercentage = request.DiscountPercentage,
+                RequiresApproval = request.RequiresApproval
+            };
+
+            var updated = await _discountService.UpdateDiscountProgramAsync(discountProgramId, discountProgram);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Discount program updated successfully.",
+                data = new
+                {
+                    updated.DiscountProgramId,
+                    updated.Name,
+                    updated.Description,
+                    updated.DiscountPercentage,
+                    updated.IsActive,
+                    updated.RequiresApproval,
+                    updated.UpdatedAt
+                }
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to update discount program {DiscountProgramId}: {Message}", discountProgramId, ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating discount program {DiscountProgramId}", discountProgramId);
+            return StatusCode(500, new { success = false, message = "An error occurred while updating the discount program." });
+        }
+    }
+
+    /// <summary>
+    /// Deletes a discount program (Admin only). Soft delete.
+    /// </summary>
+    [HttpDelete("programs/{discountProgramId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteDiscountProgram(int discountProgramId)
+    {
+        try
+        {
+            var result = await _discountService.DeleteDiscountProgramAsync(discountProgramId);
+
+            if (!result)
+            {
+                return NotFound(new { success = false, message = "Discount program not found." });
+            }
+
+            return Ok(new { success = true, message = "Discount program deleted successfully." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting discount program {DiscountProgramId}", discountProgramId);
+            return StatusCode(500, new { success = false, message = "An error occurred while deleting the discount program." });
+        }
+    }
+
+    /// <summary>
+    /// Activates a discount program (Admin only).
+    /// </summary>
+    [HttpPost("programs/{discountProgramId}/activate")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ActivateDiscountProgram(int discountProgramId)
+    {
+        try
+        {
+            await _discountService.ActivateDiscountProgramAsync(discountProgramId);
+            return Ok(new { success = true, message = "Discount program activated successfully." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to activate discount program {DiscountProgramId}: {Message}", discountProgramId, ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error activating discount program {DiscountProgramId}", discountProgramId);
+            return StatusCode(500, new { success = false, message = "An error occurred while activating the discount program." });
+        }
+    }
+
+    /// <summary>
+    /// Deactivates a discount program (Admin only).
+    /// </summary>
+    [HttpPost("programs/{discountProgramId}/deactivate")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeactivateDiscountProgram(int discountProgramId)
+    {
+        try
+        {
+            await _discountService.DeactivateDiscountProgramAsync(discountProgramId);
+            return Ok(new { success = true, message = "Discount program deactivated successfully." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to deactivate discount program {DiscountProgramId}: {Message}", discountProgramId, ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deactivating discount program {DiscountProgramId}", discountProgramId);
+            return StatusCode(500, new { success = false, message = "An error occurred while deactivating the discount program." });
+        }
+    }
+
+    /// <summary>
+    /// Retrieves all discount programs (Admin only).
+    /// </summary>
+    [HttpGet("programs")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetAllDiscountPrograms()
+    {
+        try
+        {
+            var discountPrograms = await _discountService.GetAllDiscountProgramsAsync();
+
+            return Ok(new
+            {
+                success = true,
+                message = "Discount programs retrieved successfully.",
+                data = discountPrograms.Select(dp => new
+                {
+                    dp.DiscountProgramId,
+                    dp.Name,
+                    dp.Description,
+                    dp.DiscountPercentage,
+                    dp.IsActive,
+                    dp.RequiresApproval,
+                    dp.CreatedAt,
+                    dp.UpdatedAt
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving discount programs");
+            return StatusCode(500, new { success = false, message = "An error occurred while retrieving discount programs." });
+        }
+    }
+
+    /// <summary>
+    /// Retrieves a specific discount program (Admin only).
+    /// </summary>
+    [HttpGet("programs/{discountProgramId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetDiscountProgramById(int discountProgramId)
+    {
+        try
+        {
+            var discountProgram = await _discountService.GetDiscountProgramByIdAsync(discountProgramId);
+
+            if (discountProgram == null)
+            {
+                return NotFound(new { success = false, message = "Discount program not found." });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Discount program retrieved successfully.",
+                data = new
+                {
+                    discountProgram.DiscountProgramId,
+                    discountProgram.Name,
+                    discountProgram.Description,
+                    discountProgram.DiscountPercentage,
+                    discountProgram.IsActive,
+                    discountProgram.RequiresApproval,
+                    discountProgram.CreatedAt,
+                    discountProgram.UpdatedAt
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving discount program {DiscountProgramId}", discountProgramId);
+            return StatusCode(500, new { success = false, message = "An error occurred while retrieving the discount program." });
+        }
+    }
+
+    #endregion
+
+    #region Active Discount Retrieval (Passenger)
+
+    /// <summary>
+    /// Retrieves the active discount for a specific card (Passenger).
+    /// Queries the PassengerDiscounts table directly for the materialized active discount.
+    /// </summary>
+    [HttpGet("active/{cardId}")]
+    [Authorize]
+    public async Task<IActionResult> GetActiveDiscount(int cardId)
+    {
+        // Ownership validation: the card must belong to the authenticated user
+        var cardAccess = await CanAccessCardAsync(cardId);
+        if (!cardAccess)
+        {
+            return NotFound(new { success = false, message = "Card not found." });
+        }
+
+        try
+        {
+            var activeDiscount = await _discountService.GetActiveDiscountForCardAsync(cardId);
+
+            if (activeDiscount == null)
+            {
+                return Ok(new { success = true, message = "No active discount found.", data = (object?)null });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Active discount retrieved successfully.",
+                data = new
+                {
+                    activeDiscount.PassengerDiscountId,
+                    activeDiscount.CardId,
+                    activeDiscount.DiscountProgramId,
+                    discountTypeName = activeDiscount.DiscountProgram?.Name,
+                    discountPercentage = activeDiscount.DiscountPercentage,
+                    activeDiscount.Status,
+                    activeDiscount.ApprovedBy,
+                    activeDiscount.ApprovedAt,
+                    activeDiscount.CreatedAt
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving active discount for card {CardId}", cardId);
+            return StatusCode(500, new { success = false, message = "An error occurred while retrieving active discount." });
         }
     }
 
@@ -292,11 +607,26 @@ public class DiscountController : ControllerBase
             return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
         }
 
+        // Ownership validation: the card must belong to the authenticated user
+        var cardAccess = await CanAccessCardAsync(request.CardId);
+        if (!cardAccess)
+        {
+            return NotFound(new { success = false, message = "Card not found." });
+        }
+
+        // Get the authenticated user ID
+        var userId = User.GetAuthenticatedUserId();
+        if (userId == null)
+        {
+            return Unauthorized(new { success = false, message = "User not authenticated." });
+        }
+
         try
         {
             var application = await _discountService.ApplyForDiscountAsync(
                 request.CardId,
                 request.DiscountTypeId,
+                userId.Value,
                 request.DiscountDocument);
 
             return Ok(new
@@ -307,8 +637,9 @@ public class DiscountController : ControllerBase
                 {
                     application.DiscountApplicationId,
                     application.CardId,
+                    application.UserId,
                     application.DiscountTypeId,
-                    DiscountTypeName = application.DiscountType?.Name,
+                    discountTypeName = application.DiscountType?.Name,
                     application.Status,
                     application.DiscountDocument,
                     application.CreatedAt
@@ -334,6 +665,13 @@ public class DiscountController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetApplicationsByCard(int cardId)
     {
+        // Ownership validation: the card must belong to the authenticated user
+        var cardAccess = await CanAccessCardAsync(cardId);
+        if (!cardAccess)
+        {
+            return NotFound(new { success = false, message = "Card not found." });
+        }
+
         try
         {
             var applications = await _discountService.GetApplicationsByCardAsync(cardId);
@@ -347,8 +685,8 @@ public class DiscountController : ControllerBase
                     a.DiscountApplicationId,
                     a.CardId,
                     a.DiscountTypeId,
-                    DiscountTypeName = a.DiscountType?.Name,
-                    DiscountPercentage = a.DiscountType != null ? (decimal?)a.DiscountType.DiscountPercentage : null,
+                    discountTypeName = a.DiscountType?.Name,
+                    discountPercentage = a.DiscountType != null ? (decimal?)a.DiscountType.DiscountPercentage : null,
                     a.Status,
                     a.ApprovedBy,
                     a.ApprovedAt,
@@ -378,7 +716,7 @@ public class DiscountController : ControllerBase
     {
         try
         {
-            var adminId = GetUserIdFromClaims();
+            var adminId = User.GetAuthenticatedUserId();
             if (adminId == null)
             {
                 return Unauthorized(new { success = false, message = "Admin not authenticated." });
@@ -395,7 +733,7 @@ public class DiscountController : ControllerBase
                     application.DiscountApplicationId,
                     application.CardId,
                     application.DiscountTypeId,
-                    DiscountTypeName = application.DiscountType?.Name,
+                    discountTypeName = application.DiscountType?.Name,
                     application.Status,
                     application.ApprovedBy,
                     application.ApprovedAt
@@ -423,7 +761,7 @@ public class DiscountController : ControllerBase
     {
         try
         {
-            var adminId = GetUserIdFromClaims();
+            var adminId = User.GetAuthenticatedUserId();
             if (adminId == null)
             {
                 return Unauthorized(new { success = false, message = "Admin not authenticated." });
@@ -440,7 +778,7 @@ public class DiscountController : ControllerBase
                     application.DiscountApplicationId,
                     application.CardId,
                     application.DiscountTypeId,
-                    DiscountTypeName = application.DiscountType?.Name,
+                    discountTypeName = application.DiscountType?.Name,
                     application.Status,
                     application.RejectedAt,
                     application.RejectionReason
@@ -478,10 +816,14 @@ public class DiscountController : ControllerBase
                 {
                     a.DiscountApplicationId,
                     a.CardId,
-                    CardNumber = a.Card?.CardNumber,
+                    passengerName = a.User != null 
+                        ? $"{a.User.FirstName} {a.User.LastName}" 
+                        : a.Card != null && a.Card.User != null 
+                            ? $"{a.Card.User.FirstName} {a.Card.User.LastName}" 
+                            : "Unknown",
                     a.DiscountTypeId,
-                    DiscountTypeName = a.DiscountType?.Name,
-                    DiscountPercentage = a.DiscountType?.DiscountPercentage,
+                    discountTypeName = a.DiscountType?.Name,
+                    discountPercentage = a.DiscountType?.DiscountPercentage,
                     a.Status,
                     a.DiscountDocument,
                     a.CreatedAt
@@ -514,9 +856,14 @@ public class DiscountController : ControllerBase
                 {
                     a.DiscountApplicationId,
                     a.CardId,
-                    CardNumber = a.Card?.CardNumber,
+                    passengerName = a.User != null 
+                        ? $"{a.User.FirstName} {a.User.LastName}" 
+                        : a.Card != null && a.Card.User != null 
+                            ? $"{a.Card.User.FirstName} {a.Card.User.LastName}" 
+                            : "Unknown",
                     a.DiscountTypeId,
-                    DiscountTypeName = a.DiscountType?.Name,
+                    discountTypeName = a.DiscountType?.Name,
+                    discountPercentage = a.DiscountType?.DiscountPercentage,
                     a.Status,
                     a.ApprovedBy,
                     a.ApprovedAt,
@@ -533,28 +880,88 @@ public class DiscountController : ControllerBase
         }
     }
 
-    #endregion
-
-    #region Helper Methods
-
     /// <summary>
-    /// Extracts the authenticated user's ID from the JWT claims.
+    /// Downloads the discount application document (Admin only).
     /// </summary>
-    private int? GetUserIdFromClaims()
+    [HttpGet("applications/{applicationId}/document")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetApplicationDocument(int applicationId)
     {
-        var userIdClaim = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub")
-            ?? User.FindFirstValue("userId");
-
-        if (int.TryParse(userIdClaim, out var userId))
+        try
         {
-            return userId;
-        }
+            var application = await _dbContext.DiscountApplications
+                .Include(a => a.Card)
+                .FirstOrDefaultAsync(a => a.DiscountApplicationId == applicationId);
 
-        return null;
+            if (application == null)
+            {
+                return NotFound(new { success = false, message = "Application not found." });
+            }
+
+            if (string.IsNullOrEmpty(application.DiscountDocument))
+            {
+                return NotFound(new { success = false, message = "No document uploaded for this application." });
+            }
+
+            // Check if it's an image (base64 data URL)
+            if (application.DiscountDocument.StartsWith("data:image"))
+            {
+                // Extract the base64 data and content type
+                var parts = application.DiscountDocument.Split(',');
+                if (parts.Length != 2)
+                {
+                    return BadRequest(new { success = false, message = "Invalid document format." });
+                }
+
+                var contentType = parts[0].Split(':')[1].Split(';')[0];
+                var base64Data = parts[1];
+
+                // Convert base64 to byte array
+                var bytes = Convert.FromBase64String(base64Data);
+
+                return File(bytes, contentType, $"document_{applicationId}.{contentType.Split('/')[1]}");
+            }
+            else
+            {
+                // Treat as text file
+                var bytes = System.Text.Encoding.UTF8.GetBytes(application.DiscountDocument);
+                return File(bytes, "text/plain", $"document_{applicationId}.txt");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving document for application {ApplicationId}", applicationId);
+            return StatusCode(500, new { success = false, message = "An error occurred while retrieving the document." });
+        }
     }
 
     #endregion
+
+    /// <summary>
+    /// Determines whether the authenticated user can access a specific card.
+    /// Owners may access their own cards. Admins may access any card.
+    /// </summary>
+    private async Task<bool> CanAccessCardAsync(int cardId)
+    {
+        var userId = User.GetAuthenticatedUserId();
+        if (userId == null)
+        {
+            return false;
+        }
+
+        var isAdmin = User.IsInRole(nameof(RoleName.Admin));
+
+        if (isAdmin)
+        {
+            return true;
+        }
+
+        var card = await _dbContext.Cards
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.CardId == cardId);
+
+        return card != null && card.UserId == userId.Value;
+    }
 }
 
 #region Request DTOs
@@ -619,6 +1026,44 @@ public class RejectDiscountApplicationRequest
 {
     [MaxLength(500)]
     public string? RejectionReason { get; set; }
+}
+
+/// <summary>
+/// Request DTO for creating a discount program.
+/// </summary>
+public class CreateDiscountProgramRequest
+{
+    [Required(ErrorMessage = "Name is required.")]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    [Required(ErrorMessage = "Discount percentage is required.")]
+    [Range(0, 100, ErrorMessage = "Discount percentage must be between 0 and 100.")]
+    public decimal DiscountPercentage { get; set; }
+
+    public bool RequiresApproval { get; set; } = true;
+}
+
+/// <summary>
+/// Request DTO for updating a discount program.
+/// </summary>
+public class UpdateDiscountProgramRequest
+{
+    [Required(ErrorMessage = "Name is required.")]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    [Required(ErrorMessage = "Discount percentage is required.")]
+    [Range(0, 100, ErrorMessage = "Discount percentage must be between 0 and 100.")]
+    public decimal DiscountPercentage { get; set; }
+
+    public bool RequiresApproval { get; set; } = true;
 }
 
 #endregion

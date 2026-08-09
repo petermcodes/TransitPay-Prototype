@@ -31,24 +31,41 @@ public class Trip
     public int? BusId { get; set; }
 
     /// <summary>
-    /// The station where the trip starts. Never changes after the trip has started.
+    /// The terminal where the trip starts. Never changes after the trip has started.
+    /// Nullable because a trip can be started before the driver selects the origin.
     /// </summary>
-    [ForeignKey(nameof(OriginStation))]
-    [Column("origin_station_id")]
-    public int OriginStationId { get; set; }
+    [ForeignKey(nameof(OriginTerminal))]
+    [Column("origin_terminal_id")]
+    public int? OriginTerminalId { get; set; }
 
     /// <summary>
-    /// The final destination station of the trip (the route's terminus).
-    /// Identifies the route together with the origin station.
-    /// Individual passengers may alight at different stations (see Transaction.StationId).
+    /// The final destination terminal of the trip (the route's terminus).
+    /// Identifies the route together with the origin terminal.
+    /// Nullable because a trip can be started before the driver selects the destination.
     /// </summary>
-    [ForeignKey(nameof(FinalDestinationStation))]
-    [Column("final_destination_station_id")]
-    public int FinalDestinationStationId { get; set; }
+    [ForeignKey(nameof(FinalDestinationTerminal))]
+    [Column("final_destination_terminal_id")]
+    public int? FinalDestinationTerminalId { get; set; }
 
     /// <summary>
-    /// Human-readable route name (e.g., "Central Station → Airport Station").
-    /// Auto-generated from the origin and final destination station names.
+    /// The terminal where passengers are currently boarding.
+    /// Initialized to the trip's origin terminal when the trip starts.
+    /// Updated by the conductor when passengers board at a different terminal.
+    /// </summary>
+    [ForeignKey(nameof(CurrentBoardingOriginTerminal))]
+    [Column("current_boarding_origin_terminal_id")]
+    public int? CurrentBoardingOriginTerminalId { get; set; }
+
+    /// <summary>
+    /// When the current boarding origin was last updated.
+    /// Null if the boarding origin has never been changed from the initial value.
+    /// </summary>
+    [Column("boarding_origin_updated_at")]
+    public DateTime? BoardingOriginUpdatedAt { get; set; }
+
+    /// <summary>
+    /// Human-readable route name (e.g., "Central Terminal → Airport Terminal").
+    /// Auto-generated from the origin and final destination terminal names.
     /// </summary>
     [Column("route_name")]
     public string RouteName { get; set; } = string.Empty;
@@ -88,8 +105,13 @@ public class Trip
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
+    [Timestamp]
+    [Column("row_version")]
+    public byte[] RowVersion { get; set; } = [];
+
     public User? Driver { get; set; }
-    public Station? OriginStation { get; set; }
-    public Station? FinalDestinationStation { get; set; }
+    public Terminal? OriginTerminal { get; set; }
+    public Terminal? FinalDestinationTerminal { get; set; }
+    public Terminal? CurrentBoardingOriginTerminal { get; set; }
     public ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
 }

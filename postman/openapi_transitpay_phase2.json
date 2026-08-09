@@ -1,0 +1,132 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "TransitPay API (Phase2 Contract Alignment)",
+    "version": "1.0.0",
+    "description": "OpenAPI snapshot reflecting Phase 1 security changes: MaskedCardNumber and QR payload sanitization."
+  },
+  "paths": {
+    "/api/payment/qr/{cardId}": {
+      "get": {
+        "summary": "Get QR Ticket",
+        "parameters": [
+          {
+            "name": "cardId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "QR Ticket",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QRTicketResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payment/process-conductor": {
+      "post": {
+        "summary": "Process conductor-initiated payment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "QRData": { "type": "string" },
+                  "Signature": { "type": "string" },
+                  "OriginStationId": { "type": "integer" },
+                  "DestinationStationId": { "type": "integer" }
+                },
+                "required": ["QRData","Signature","OriginStationId","DestinationStationId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scan Receipt",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payment/scan-physical": {
+      "post": {
+        "summary": "Scan physical card (driver supplies PAN in request)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "CardNumber": { "type": "string", "description": "PAN provided by driver for scan (request only)" },
+                  "OriginStationId": { "type": "integer" },
+                  "DestinationStationId": { "type": "integer" }
+                },
+                "required": ["CardNumber","OriginStationId","DestinationStationId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scan Receipt",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "QRTicketResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "string", "description": "Base64-encoded JSON payload containing token and minimal identifiers (must not contain raw PAN)" },
+          "signature": { "type": "string" },
+          "cardId": { "type": "integer" },
+          "maskedCardNumber": { "type": "string", "nullable": true }
+        },
+        "required": ["data","signature","cardId"]
+      },
+      "PaymentResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "data": { "$ref": "#/components/schemas/PaymentData" }
+        }
+      },
+      "PaymentData": {
+        "type": "object",
+        "properties": {
+          "paymentSessionId": { "type": "string", "format": "uuid" },
+          "cardId": { "type": "integer" },
+          "passengerName": { "type": "string", "nullable": true },
+          "maskedCardNumber": { "type": "string", "nullable": true },
+          "originStationId": { "type": "integer" },
+          "destinationStationId": { "type": "integer" },
+          "lockedFare": { "type": "number", "format": "decimal" },
+          "remainingBalance": { "type": "number", "format": "decimal" },
+          "paymentTimestamp": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

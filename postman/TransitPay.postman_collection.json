@@ -1,0 +1,75 @@
+{
+  "info": {
+    "name": "TransitPay API - Updated Contracts",
+    "_postman_id": "b3d9d5c8-0000-4000-8000-000000000001",
+    "description": "Representative collection updated to use MaskedCardNumber and to reflect QR payload changes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Get QR Ticket",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/payment/qr/:cardId",
+          "host": ["{{baseUrl}}"],
+          "path": ["api","payment","qr",":cardId"]
+        }
+      },
+      "response": [
+        {
+          "name": "QR Ticket example",
+          "originalRequest": {},
+          "status": "OK",
+          "code": 200,
+          "_body": "{\n  \"data\": \"eyJ0b2tlbiI6ICJ0a25fYWJjMTIzIiwgImNvdW50ZXIiOiAxLCAiY2FyZElkIjogNDIsICJtYXNrZWRDYXJkTnVtYmVyIjogIuKAmK4gMTExMSJ9\",\n  \"signature\": \"sig_dummy\",\n  \"cardId\": 42,\n  \"maskedCardNumber\": \"•••• 1111\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Process Conductor Payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"QRData\": \"<base64-data>\",\n  \"Signature\": \"<signature>\",\n  \"OriginStationId\": 1,\n  \"DestinationStationId\": 2\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/payment/process-conductor", "host": ["{{baseUrl}}"], "path": ["api","payment","process-conductor"] }
+      },
+      "response": [
+        {
+          "name": "Scan Receipt example",
+          "status": "OK",
+          "code": 200,
+          "_body": "{\n  \"success\": true,\n  \"message\": \"Payment processed\",\n  \"data\": {\n    \"cardId\": 42,\n    \"passengerName\": \"Jane Doe\",\n    \"maskedCardNumber\": \"•••• 1111\",\n    \"lockedFare\": 100.00,\n    \"remainingBalance\": 50.00,\n    \"paymentTimestamp\": \"2026-08-05T00:00:00Z\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Scan Physical Card (driver)",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"CardNumber\": \"<PAN_here>\",\n  \"OriginStationId\": 1,\n  \"DestinationStationId\": 2\n}" },
+        "url": { "raw": "{{baseUrl}}/api/payment/scan-physical", "host": ["{{baseUrl}}"], "path": ["api","payment","scan-physical"] }
+      },
+      "response": [
+        {
+          "name": "Scan Physical example",
+          "status": "OK",
+          "code": 200,
+          "_body": "{\n  \"success\": true,\n  \"message\": \"Payment processed\",\n  \"data\": {\n    \"cardId\": 42,\n    \"maskedCardNumber\": \"•••• 1111\",\n    \"lockedFare\": 100.00,\n    \"remainingBalance\": 50.00,\n    \"paymentTimestamp\": \"2026-08-05T00:00:00Z\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Transactions",
+      "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/transactions/:cardId?page=1&pageSize=20", "host": ["{{baseUrl}}"], "path": ["api","transactions",":cardId"], "query": [{"key":"page","value":"1"},{"key":"pageSize","value":"20"}] } },
+      "response": []
+    }
+  ]
+}

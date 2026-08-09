@@ -24,14 +24,14 @@ public class FareRuleController : ControllerBase
     public async Task<IActionResult> GetFareRules()
     {
         var fareRules = await _dbContext.FareRules
-            .Include(fr => fr.OriginStation)
-            .Include(fr => fr.DestinationStation)
+            .Include(fr => fr.OriginTerminal)
+            .Include(fr => fr.DestinationTerminal)
             .Where(fr => fr.DeletedAt == null)
             .Select(fr => new
             {
                 fr.FareId,
-                originStationName = fr.OriginStation!.StationName,
-                destinationStationName = fr.DestinationStation!.StationName,
+                originTerminalName = fr.OriginTerminal!.TerminalName,
+                destinationTerminalName = fr.DestinationTerminal!.TerminalName,
                 fr.VehicleType,
                 fr.PassengerType,
                 fr.FareAmount,
@@ -52,10 +52,10 @@ public class FareRuleController : ControllerBase
 
         var fareRule = new FareRule
         {
-            OriginStationId = request.OriginStationId,
-            DestinationStationId = request.DestinationStationId,
-            VehicleType = Enum.Parse<VehicleType>(request.VehicleType),
-            PassengerType = Enum.Parse<PassengerType>(request.PassengerType),
+            OriginTerminalId = request.OriginTerminalId,
+            DestinationTerminalId = request.DestinationTerminalId,
+            VehicleType = VehicleType.BUS, // Default value
+            PassengerType = PassengerType.Passenger, // Default value
             FareAmount = request.FareAmount,
             EffectiveDate = request.EffectiveDate,
             IsActive = true,
@@ -69,17 +69,11 @@ public class FareRuleController : ControllerBase
 
 public class FareRuleCreateRequest
 {
-    [Required(ErrorMessage = "Origin station ID is required.")]
-    public int OriginStationId { get; set; }
+    [Required(ErrorMessage = "Origin terminal ID is required.")]
+    public int OriginTerminalId { get; set; }
 
-    [Required(ErrorMessage = "Destination station ID is required.")]
-    public int DestinationStationId { get; set; }
-
-    [Required(ErrorMessage = "Vehicle type is required.")]
-    public string VehicleType { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Passenger type is required.")]
-    public string PassengerType { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Destination terminal ID is required.")]
+    public int DestinationTerminalId { get; set; }
 
     [Range(0.01, 10000, ErrorMessage = "Fare amount must be greater than 0.")]
     public decimal FareAmount { get; set; }

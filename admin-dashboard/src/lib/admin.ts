@@ -1,4 +1,4 @@
-import { api } from './api';
+import { api, getBlob } from './api';
 import { authService } from './auth';
 
 export interface User {
@@ -9,6 +9,7 @@ export interface User {
   mobileNumber: string;
   isActive: boolean;
   roleName: string;
+  createdAt?: string;
 }
 
 export interface Driver {
@@ -20,26 +21,19 @@ export interface Driver {
   isActive: boolean;
 }
 
-export interface Station {
-  stationId: number;
-  stationName: string;
+export interface Terminal {
+  terminalId: number;
+  terminalName: string;
   isActive: boolean;
-  townName: string;
-}
-
-export interface Town {
-  townId: number;
-  townName: string;
-  isActive: boolean;
-  stationCount: number;
+  terminalCount: number;
 }
 
 export interface FareRule {
   fareId: number;
-  originStationName: string;
-  destinationStationName: string;
-  vehicleType: string;
-  passengerType: string;
+  originTerminalId?: number;
+  destinationTerminalId?: number;
+  originTerminalName: string;
+  destinationTerminalName: string;
   fareAmount: number;
   effectiveDate: string;
   isActive: boolean;
@@ -47,7 +41,10 @@ export interface FareRule {
 
 export interface Transaction {
   transactionId: number;
-  cardNumber: string;
+  passengerName?: string;
+  originTerminalName?: string;
+  destinationTerminalName?: string;
+  maskedCardNumber: string;
   amount: number;
   transactionType: string;
   transactionName: string;
@@ -60,10 +57,10 @@ export interface Trip {
   tripId: number;
   driverId: number;
   driverName: string;
-  originStationId: number;
-  originStationName: string;
-  finalDestinationStationId: number;
-  finalDestinationStationName: string;
+  originTerminalId: number;
+  originTerminalName: string;
+  finalDestinationTerminalId: number;
+  finalDestinationTerminalName: string;
   routeName: string;
   tripStatus: string;
   startedAt: string | null;
@@ -87,11 +84,13 @@ export interface DiscountType {
 export interface DiscountApplication {
   discountApplicationId: number;
   cardId: number;
-  cardNumber: string;
+  userId: number;
+  maskedCardNumber: string;
+  passengerName: string;
   discountTypeId: number;
   discountTypeName: string;
   discountPercentage: number | null;
-  status: string;
+  status: string; // 'Pending', 'Approved', 'Rejected', 'Expired'
   discountDocument: string | null;
   approvedBy: number | null;
   approvedAt: string | null;
@@ -101,12 +100,24 @@ export interface DiscountApplication {
 }
 
 export interface ReportSummary {
-  totalUsers: number;
+  totalPassengers: number;
   totalDrivers: number;
-  totalStations: number;
-  totalTowns: number;
+  totalTerminals: number;
   totalTransactions: number;
   totalRevenue: number;
+}
+
+export interface PassengerDiscount {
+  passengerDiscountId: number;
+  cardId: number;
+  maskedCardNumber: string;
+  passengerName?: string;
+  discountTypeId: number;
+  discountTypeName: string;
+  discountPercentage: number;
+  status: string;
+  assignedAt: string;
+  expiresAt?: string;
 }
 
 type ApiResponseWithMessage<T> = { success: boolean; data: T; message?: string };
@@ -131,6 +142,42 @@ export const adminService = {
     };
   },
 
+  async activateUser(userId: number): Promise<void> {
+    const token = authService.getToken();
+    const response = await api.put<{ success: boolean; message?: string }>(
+      `/api/admin/users/${userId}/activate`,
+      {},
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to activate user');
+    }
+  },
+
+  async deactivateUser(userId: number): Promise<void> {
+    const token = authService.getToken();
+    const response = await api.put<{ success: boolean; message?: string }>(
+      `/api/admin/users/${userId}/deactivate`,
+      {},
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to deactivate user');
+    }
+  },
+
+  async resetPassword(userId: number, newPassword: string): Promise<void> {
+    const token = authService.getToken();
+    const response = await api.post<{ success: boolean; message?: string }>(
+      `/api/admin/users/${userId}/reset-password`,
+      { newPassword },
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to reset password');
+    }
+  },
+
   async getDrivers(): Promise<Driver[]> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<Driver[]>>(
@@ -147,7 +194,7 @@ export const adminService = {
     firstName: string;
     lastName: string;
     mobileNumber: string;
-    password: string;
+    password?: string;
   }): Promise<Driver> {
     const token = authService.getToken();
     const response = await api.post<ApiResponseWithMessage<Driver>>(
@@ -159,30 +206,6 @@ export const adminService = {
       throw new Error(response.message || 'Failed to create driver');
     }
     return response.data;
-  },
-
-  async approveDriver(driverId: number): Promise<void> {
-    const token = authService.getToken();
-    const response = await api.put<{ success: boolean; message?: string }>(
-      `/api/driver/${driverId}/approve`,
-      {},
-      token || undefined
-    );
-    if (!response.success) {
-      throw new Error(response.message || 'Failed to approve driver');
-    }
-  },
-
-  async rejectDriver(driverId: number): Promise<void> {
-    const token = authService.getToken();
-    const response = await api.put<{ success: boolean; message?: string }>(
-      `/api/driver/${driverId}/reject`,
-      {},
-      token || undefined
-    );
-    if (!response.success) {
-      throw new Error(response.message || 'Failed to reject driver');
-    }
   },
 
   async topUpWallet(cardId: number, amount: number): Promise<{ balance: number }> {
@@ -198,54 +221,78 @@ export const adminService = {
     return response.data;
   },
 
-  async getStations(): Promise<Station[]> {
+  async getCardByUserId(userId: number): Promise<{ cardId: number; cardNumber: string }> {
     const token = authService.getToken();
-    const response = await api.get<ApiResponseWithMessage<Station[]>>(
-      '/api/admin/stations',
+    const response = await api.get<ApiResponseWithMessage<{ cardId: number; cardNumber: string }>>(
+      `/api/cards/user/${userId}`,
       token || undefined
     );
     if (!response.success) {
-      throw new Error(response.message || 'Failed to get stations');
+      throw new Error(response.message || 'Failed to get card');
     }
     return response.data;
   },
 
-  async createStation(data: { townId: number; stationName: string }): Promise<Station> {
+  async getTerminals(): Promise<Terminal[]> {
     const token = authService.getToken();
-    const response = await api.post<ApiResponseWithMessage<Station>>(
-      '/api/admin/stations',
+    const response = await api.get<ApiResponseWithMessage<Terminal[]>>(
+      '/api/admin/terminals',
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to get terminals');
+    }
+    return response.data;
+  },
+
+  async createTerminal(data: { terminalName: string }): Promise<Terminal> {
+    const token = authService.getToken();
+    const response = await api.post<ApiResponseWithMessage<Terminal>>(
+      '/api/admin/terminals',
       data,
       token || undefined
     );
     if (!response.success) {
-      throw new Error(response.message || 'Failed to create station');
+      throw new Error(response.message || 'Failed to create terminal');
     }
     return response.data;
   },
 
-  async getTowns(): Promise<Town[]> {
+  async updateTerminal(terminalId: number, data: { terminalName: string }): Promise<Terminal> {
     const token = authService.getToken();
-    const response = await api.get<ApiResponseWithMessage<Town[]>>(
-      '/api/admin/towns',
-      token || undefined
-    );
-    if (!response.success) {
-      throw new Error(response.message || 'Failed to get towns');
-    }
-    return response.data;
-  },
-
-  async createTown(data: { townName: string }): Promise<Town> {
-    const token = authService.getToken();
-    const response = await api.post<ApiResponseWithMessage<Town>>(
-      '/api/admin/towns',
+    const response = await api.put<ApiResponseWithMessage<Terminal>>(
+      `/api/admin/terminals/${terminalId}`,
       data,
       token || undefined
     );
     if (!response.success) {
-      throw new Error(response.message || 'Failed to create town');
+      throw new Error(response.message || 'Failed to update terminal');
     }
     return response.data;
+  },
+
+  async deleteTerminal(terminalId: number, confirm: boolean = false): Promise<{ 
+    success: boolean; 
+    warning?: boolean; 
+    requiresConfirmation?: boolean;
+    message: string; 
+    affectedFareRules?: number 
+  }> {
+    const token = authService.getToken();
+    const response = await api.delete<{ 
+      success: boolean; 
+      warning?: boolean; 
+      requiresConfirmation?: boolean;
+      message: string; 
+      affectedFareRules?: number 
+    }>(
+      `/api/admin/terminals/${terminalId}?confirm=${confirm}`,
+      token || undefined
+    );
+    if (!response.success && !response.warning) {
+      throw new Error(response.message || 'Failed to delete terminal');
+    }
+    return response;
   },
 
   async getFareRules(): Promise<FareRule[]> {
@@ -261,10 +308,8 @@ export const adminService = {
   },
 
   async createFareRule(data: {
-    originStationId: number;
-    destinationStationId: number;
-    vehicleType: string;
-    passengerType: string;
+    originTerminalId: number;
+    destinationTerminalId: number;
     fareAmount: number;
     effectiveDate: string;
   }): Promise<FareRule> {
@@ -278,6 +323,35 @@ export const adminService = {
       throw new Error(response.message || 'Failed to create fare rule');
     }
     return response.data;
+  },
+
+  async updateFareRule(fareId: number, data: {
+    originTerminalId: number;
+    destinationTerminalId: number;
+    fareAmount: number;
+    effectiveDate: string;
+  }): Promise<FareRule> {
+    const token = authService.getToken();
+    const response = await api.put<ApiResponseWithMessage<FareRule>>(
+      `/api/admin/fare-rules/${fareId}`,
+      data,
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to update fare rule');
+    }
+    return response.data;
+  },
+
+  async deleteFareRule(fareId: number): Promise<void> {
+    const token = authService.getToken();
+    const response = await api.delete<{ success: boolean; message?: string }>(
+      `/api/admin/fare-rules/${fareId}`,
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to delete fare rule');
+    }
   },
 
   async getTransactions(page = 1, pageSize = 20): Promise<{
@@ -310,7 +384,7 @@ export const adminService = {
     return response.data;
   },
 
-  // Trip Management
+  // Trip Management (Read-Only)
   async getTrips(page = 1, pageSize = 20): Promise<{
     data: Trip[];
     pagination: { page: number; pageSize: number; total: number; totalPages: number };
@@ -339,30 +413,6 @@ export const adminService = {
       throw new Error(response.message || 'Failed to get trip');
     }
     return response.data;
-  },
-
-  async endTrip(tripId: number): Promise<void> {
-    const token = authService.getToken();
-    const response = await api.post<{ success: boolean; message?: string }>(
-      `/api/admin/trips/${tripId}/end`,
-      {},
-      token || undefined
-    );
-    if (!response.success) {
-      throw new Error(response.message || 'Failed to end trip');
-    }
-  },
-
-  async cancelTrip(tripId: number): Promise<void> {
-    const token = authService.getToken();
-    const response = await api.post<{ success: boolean; message?: string }>(
-      `/api/admin/trips/${tripId}/cancel`,
-      {},
-      token || undefined
-    );
-    if (!response.success) {
-      throw new Error(response.message || 'Failed to cancel trip');
-    }
   },
 
   // Discount Type Management
@@ -462,22 +512,16 @@ export const adminService = {
     return response.data;
   },
 
-  async getAllApplications(page = 1, pageSize = 20): Promise<{
-    data: DiscountApplication[];
-    pagination: { page: number; pageSize: number; total: number; totalPages: number };
-  }> {
+  async getAllApplications(): Promise<DiscountApplication[]> {
     const token = authService.getToken();
-    const response = await api.get<PaginatedResponse<DiscountApplication[]>>(
-      `/api/discount/applications?page=${page}&pageSize=${pageSize}`,
+    const response = await api.get<ApiResponseWithMessage<DiscountApplication[]>>(
+      '/api/discount/applications',
       token || undefined
     );
     if (!response.success) {
       throw new Error(response.message || 'Failed to get applications');
     }
-    return {
-      data: response.data,
-      pagination: response.pagination,
-    };
+    return response.data;
   },
 
   async approveApplication(applicationId: number): Promise<void> {
@@ -501,6 +545,115 @@ export const adminService = {
     );
     if (!response.success) {
       throw new Error(response.message || 'Failed to reject application');
+    }
+  },
+
+  async getApplicationDocument(applicationId: number): Promise<Blob> {
+    const token = authService.getToken();
+    return getBlob(
+      `/api/discount/applications/${applicationId}/document`,
+      token || undefined
+    );
+  },
+
+  // Passenger Discount Management (using Discount Applications)
+  async getActivePassengerDiscounts(): Promise<PassengerDiscount[]> {
+    const token = authService.getToken();
+    // Get all applications and filter by Approved status (status = 1)
+    const response = await api.get<ApiResponseWithMessage<DiscountApplication[]>>(
+      '/api/discount/applications',
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to get active passenger discounts');
+    }
+    // Filter to only approved applications and map to PassengerDiscount interface
+    const approvedApplications = response.data.filter(app => app.status === 'Approved');
+    return approvedApplications.map(app => ({
+      passengerDiscountId: app.discountApplicationId,
+      cardId: app.cardId,
+      maskedCardNumber: app.maskedCardNumber,
+      passengerName: app.passengerName,
+      discountTypeId: app.discountTypeId,
+      discountTypeName: app.discountTypeName,
+      discountPercentage: app.discountPercentage || 0,
+      status: app.status === 'Approved' ? 'Active' : 'Inactive',
+      assignedAt: app.approvedAt || app.createdAt,
+      expiresAt: undefined
+    }));
+  },
+
+  async getAllPassengerDiscounts(): Promise<PassengerDiscount[]> {
+    const token = authService.getToken();
+    const response = await api.get<ApiResponseWithMessage<DiscountApplication[]>>(
+      '/api/discount/applications',
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to get passenger discounts');
+    }
+    // Map DiscountApplication to PassengerDiscount interface
+    return response.data.map(app => ({
+      passengerDiscountId: app.discountApplicationId,
+      cardId: app.cardId,
+      maskedCardNumber: app.maskedCardNumber,
+      passengerName: app.passengerName,
+      discountTypeId: app.discountTypeId,
+      discountTypeName: app.discountTypeName,
+      discountPercentage: app.discountPercentage || 0,
+      status: app.status === 'Approved' ? 'Active' : app.status === 'Pending' ? 'Pending' : app.status === 'Rejected' ? 'Rejected' : 'Expired',
+      assignedAt: app.approvedAt || app.createdAt,
+      expiresAt: undefined
+    }));
+  },
+
+  async assignPassengerDiscount(cardId: number, discountTypeId: number): Promise<PassengerDiscount> {
+    const token = authService.getToken();
+    // First, create a discount application
+    const createResponse = await api.post<{ success: boolean; message: string; data: DiscountApplication }>(
+      '/api/discount/apply',
+      { cardId, discountTypeId },
+      token || undefined
+    );
+    if (!createResponse.success) {
+      throw new Error(createResponse.message || 'Failed to create discount application');
+    }
+    
+    // Then approve it immediately
+    const approveResponse = await api.post<{ success: boolean; message?: string }>(
+      `/api/discount/applications/${createResponse.data.discountApplicationId}/approve`,
+      {},
+      token || undefined
+    );
+    if (!approveResponse.success) {
+      throw new Error(approveResponse.message || 'Failed to approve discount application');
+    }
+    
+    // Return the created application mapped to PassengerDiscount interface
+    return {
+      passengerDiscountId: createResponse.data.discountApplicationId,
+      cardId: createResponse.data.cardId,
+      maskedCardNumber: createResponse.data.maskedCardNumber,
+      passengerName: createResponse.data.passengerName,
+      discountTypeId: createResponse.data.discountTypeId,
+      discountTypeName: createResponse.data.discountTypeName,
+      discountPercentage: createResponse.data.discountPercentage || 0,
+      status: 'Active',
+      assignedAt: new Date().toISOString(),
+      expiresAt: undefined
+    };
+  },
+
+  async removePassengerDiscount(passengerDiscountId: number): Promise<void> {
+    const token = authService.getToken();
+    // For discount applications, we reject them instead of deleting
+    const response = await api.post<{ success: boolean; message?: string }>(
+      `/api/discount/applications/${passengerDiscountId}/reject`,
+      { rejectionReason: 'Removed by admin' },
+      token || undefined
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to remove discount');
     }
   },
 };

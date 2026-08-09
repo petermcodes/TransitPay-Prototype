@@ -16,7 +16,6 @@ public class PaymentResponse
 /// </summary>
 public class PaymentData
 {
-    public Guid PaymentSessionId { get; set; }
     public int CardId { get; set; }
 
     /// <summary>
@@ -29,15 +28,38 @@ public class PaymentData
     /// </summary>
     public string? MaskedCardNumber { get; set; }
 
-    public int OriginStationId { get; set; }
-    public int DestinationStationId { get; set; }
-    public string? OriginStationName { get; set; }
-    public string? DestinationStationName { get; set; }
+    public int OriginTerminalId { get; set; }
+    public int DestinationTerminalId { get; set; }
+    public string? OriginTerminalName { get; set; }
+    public string? DestinationTerminalName { get; set; }
 
     /// <summary>
     /// The locked fare charged for this payment (from the Payment Session).
+    /// For the conductor flow this equals the regular fare before discount.
     /// </summary>
     public decimal LockedFare { get; set; }
+
+    /// <summary>
+    /// The regular fare amount before any discount was applied.
+    /// </summary>
+    public decimal RegularFare { get; set; }
+
+    /// <summary>
+    /// The discount percentage applied (e.g., 50.00 for 50% off).
+    /// Zero or null when no discount was applied.
+    /// </summary>
+    public decimal? DiscountPercentage { get; set; }
+
+    /// <summary>
+    /// The discount amount deducted from the regular fare.
+    /// Zero or null when no discount was applied.
+    /// </summary>
+    public decimal? DiscountAmount { get; set; }
+
+    /// <summary>
+    /// The final fare amount actually charged after discount.
+    /// </summary>
+    public decimal FinalFare { get; set; }
 
     /// <summary>
     /// The remaining wallet balance after payment.

@@ -1,32 +1,30 @@
 import { useState, useEffect } from 'react'
 import {
-  LayoutDashboard, Users, Bus, MapPin, Map,
+  LayoutDashboard, Users, Bus, Map,
   Grid3X3, CreditCard, BarChart3, Settings,
-  Search, Plus, Edit2, Trash2, CheckCircle,
+  Search, Plus, Edit2, CheckCircle, Trash2, Eye,
   XCircle, AlertCircle, TrendingUp, TrendingDown,
-  DollarSign, ArrowDownLeft,
-  Bell, LogOut, Menu, X, Eye, Download, RefreshCw,
-  Tag, FileText, Activity
+  DollarSign,
+  Bell, LogOut, Menu, X, RefreshCw,
+  Tag, FileText, Activity, User, Lock, Wallet
 } from 'lucide-react'
-import { adminService } from './lib/admin'
+import { adminService, type Terminal, type User as AppUser, type Driver, type FareRule, type Transaction, type ReportSummary } from './lib/admin'
 import { authService } from './lib/auth'
 import { ToastContainer, useToast } from './components/Toast'
-import { StationModal } from './components/StationModal'
 import { DriverModal } from './components/DriverModal'
-import { TownModal } from './components/TownModal'
+import { TerminalModal } from './components/TerminalModal'
 import { FareRuleModal } from './components/FareRuleModal'
-import { TripModal } from './components/TripModal'
 import { DiscountTypeModal } from './components/DiscountTypeModal'
 import { TripsView } from './views/TripsView'
 import { DiscountTypesView } from './views/DiscountTypesView'
 import { DiscountApplicationsView } from './views/DiscountApplicationsView'
 import { TripMonitoringView } from './views/TripMonitoringView'
-import type { Town, Station } from './lib/admin'
+import { PassengerDiscountsView } from './views/PassengerDiscountsView'
 
 type AdminSection =
-  | 'dashboard' | 'users' | 'drivers' | 'stations' | 'towns'
+  | 'dashboard' | 'users' | 'drivers' | 'terminals'
   | 'fare-matrix' | 'transactions' | 'reports' | 'settings'
-  | 'trips' | 'discount-types' | 'discount-applications' | 'trip-monitoring'
+  | 'trips' | 'discount-types' | 'discount-applications' | 'passenger-discounts' | 'trip-monitoring'
 
 // ── Shared ─────────────────────────────────────────────────────────────────────
 
@@ -90,28 +88,31 @@ function KpiCard({ icon: Icon, label, value, sub, trend, color = 'blue' }: {
 
 // ── SIDEBAR ────────────────────────────────────────────────────────────────────
 
-const navItems: { id: AdminSection; label: string; icon: React.ElementType; badge?: number }[] = [
+const navItems: { id: AdminSection; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'users', label: 'Passengers', icon: Users, badge: 12 },
-  { id: 'drivers', label: 'Drivers', icon: Bus, badge: 3 },
-  { id: 'stations', label: 'Stations', icon: MapPin },
-  { id: 'towns', label: 'Towns', icon: Map },
+  { id: 'users', label: 'Passengers', icon: Users },
+  { id: 'drivers', label: 'Drivers', icon: Bus },
+  { id: 'terminals', label: 'Terminals', icon: Map },
   { id: 'fare-matrix', label: 'Fare Matrix', icon: Grid3X3 },
   { id: 'transactions', label: 'Transactions', icon: CreditCard },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'trips', label: 'Trips', icon: Bus },
-  { id: 'discount-types', label: 'Discount Types', icon: Tag },
-  { id: 'discount-applications', label: 'Discount Apps', icon: FileText, badge: 3 },
+  { id: 'discount-types', label: 'Discount Programs', icon: Tag },
+  { id: 'discount-applications', label: 'Discount Apps', icon: FileText },
+  { id: 'passenger-discounts', label: 'Passenger Discounts', icon: User },
   { id: 'trip-monitoring', label: 'Trip Monitor', icon: Activity },
 ]
 
 function Sidebar({ active, setActive, open, setOpen, onLogout }: {
   active: AdminSection; setActive: (s: AdminSection) => void; open: boolean; setOpen: (v: boolean) => void; onLogout: () => void
 }) {
+  const user = authService.getUser()
+  const displayName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Admin User'
+  const initials = user ? `${user.firstName[0] || ''}${user.lastName[0] || ''}`.toUpperCase() : 'AD'
+
   return (
     <>
-      {/* Overlay */}
       {open && <div className="fixed inset-0 bg-black/40 z-20 lg:hidden" onClick={() => setOpen(false)} />}
 
       <aside className={`fixed lg:relative top-0 left-0 h-full z-30 flex flex-col bg-white border-r border-slate-100 shadow-lg lg:shadow-none transition-all duration-300
@@ -139,11 +140,6 @@ function Sidebar({ active, setActive, open, setOpen, onLogout }: {
                 ${active === item.id ? 'bg-blue-gradient text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'}`}>
               <item.icon size={18} />
               <span className="flex-1 text-left">{item.label}</span>
-              {item.badge && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${active === item.id ? 'bg-white/30 text-white' : 'bg-blue-100 text-blue-600'}`}>
-                  {item.badge}
-                </span>
-              )}
             </button>
           ))}
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-2 mt-4">Management</p>
@@ -161,11 +157,11 @@ function Sidebar({ active, setActive, open, setOpen, onLogout }: {
         <div className="px-4 py-4 border-t border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">
-              <span className="font-poppins text-sm font-bold text-white">AD</span>
+              <span className="font-poppins text-sm font-bold text-white">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-800">Admin User</p>
-              <p className="text-xs text-slate-400 truncate">admin@transitpay.ph</p>
+              <p className="text-sm font-semibold text-slate-800">{displayName}</p>
+              <p className="text-xs text-slate-400 truncate">{user?.username || 'admin'}</p>
             </div>
             <button onClick={onLogout} className="text-slate-400 hover:text-red-500 transition-colors"><LogOut size={16} /></button>
           </div>
@@ -197,7 +193,6 @@ function Topbar({ section, sidebarOpen, setSidebarOpen }: { section: AdminSectio
         </div>
         <button className="relative w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors">
           <Bell size={16} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
         </button>
         <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">
           <span className="font-poppins text-xs font-bold text-white">AD</span>
@@ -209,146 +204,168 @@ function Topbar({ section, sidebarOpen, setSidebarOpen }: { section: AdminSectio
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 
-function RevenueChart() {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-  const values = [8200, 9400, 7800, 11200, 10800, 13400, 12100]
-  const max = Math.max(...values)
-
-  return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <p className="font-poppins font-bold text-slate-800">Revenue Overview</p>
-          <p className="text-xs text-slate-500 mt-0.5">This week's fare collection</p>
-        </div>
-        <div className="flex gap-1">
-          {['Week', 'Month', 'Year'].map((t, i) => (
-            <button key={t} className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${i === 0 ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>{t}</button>
-          ))}
-        </div>
-      </div>
-      <div className="flex items-end gap-2 h-40">
-        {values.map((v, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-            <span className="text-[10px] text-slate-400">₱{(v / 1000).toFixed(1)}k</span>
-            <div className="w-full rounded-t-lg transition-all hover:opacity-80" style={{
-              height: `${(v / max) * 100}%`,
-              background: i === 5 ? 'linear-gradient(135deg, #1565C0, #2196F3)' : '#DBEAFE',
-            }} />
-            <span className="text-[10px] text-slate-500">{days[i]}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4">
-        {[['Total', '₱72,900'], ['Average', '₱10,414'], ['Best Day', 'Sat ₱13,400']].map(([k, v]) => (
-          <div key={k}>
-            <p className="text-xs text-slate-400">{k}</p>
-            <p className="font-poppins font-bold text-slate-800 text-sm mt-0.5">{v}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-const recentTx = [
-  { id: 'TX-8821', passenger: 'Juan Dela Cruz', type: 'Fare', amount: 23, status: 'completed', date: 'Aug 2, 10:14 AM' },
-  { id: 'TX-8820', passenger: 'Maria Santos', type: 'Top Up', amount: 500, status: 'completed', date: 'Aug 2, 10:02 AM' },
-  { id: 'TX-8819', passenger: 'Pedro Reyes', type: 'Fare', amount: 18, status: 'completed', date: 'Aug 2, 09:55 AM' },
-  { id: 'TX-8818', passenger: 'Anna Cruz', type: 'Refund', amount: 23, status: 'completed', date: 'Aug 2, 09:40 AM' },
-  { id: 'TX-8817', passenger: 'Carlo Tan', type: 'Fare', amount: 28, status: 'pending', date: 'Aug 2, 09:30 AM' },
-]
-
 function DashboardView() {
+  const [summary, setSummary] = useState<ReportSummary | null>(null)
+  const [recentTx, setRecentTx] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const [s, txs] = await Promise.all([
+          adminService.getReportSummary(),
+          adminService.getTransactions(1, 5),
+        ])
+        setSummary(s)
+        setRecentTx(txs.data)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <RefreshCw size={32} className="text-blue-400 animate-spin" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-2">
+        <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+        <p className="text-xs text-red-600">{error}</p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard icon={Users} label="Total Passengers" value="18,421" sub="Registered" trend="+142" color="blue" />
-        <KpiCard icon={Bus} label="Total Drivers" value="284" sub="Active drivers" trend="+8" color="green" />
-        <KpiCard icon={MapPin} label="Active Stations" value="47" sub="Across 7 towns" color="orange" />
-        <KpiCard icon={DollarSign} label="Daily Revenue" value="₱12,845" sub="Aug 2, 2026" trend="+12%" color="green" />
-        <KpiCard icon={TrendingUp} label="Monthly Revenue" value="₱284,920" sub="August 2026" trend="+8%" color="purple" />
-        <KpiCard icon={CreditCard} label="Transactions" value="1,042" sub="Today" trend="+5%" color="blue" />
-      </div>
-
-      {/* Chart + stats */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2"><RevenueChart /></div>
-        <div className="flex flex-col gap-3">
-          <div className="bg-blue-gradient rounded-2xl p-5 text-white">
-            <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider mb-1">Today's Collection</p>
-            <p className="font-poppins text-3xl font-bold">₱12,845</p>
-            <p className="text-blue-200 text-sm mt-1">1,042 transactions</p>
-            <div className="mt-3 pt-3 border-t border-white/20 flex justify-between">
-              <div><p className="text-blue-100 text-xs">Avg Fare</p><p className="font-poppins font-bold">₱23.40</p></div>
-              <div><p className="text-blue-100 text-xs">Peak Hour</p><p className="font-poppins font-bold">8–9 AM</p></div>
-              <div><p className="text-blue-100 text-xs">Top Route</p><p className="font-poppins font-bold">R-42</p></div>
-            </div>
-          </div>
-          {[['Pending Approvals', '3 drivers', 'warning'], ['Failed Transactions', '12 today', 'danger'], ['Active Routes', '18 of 22', 'success']].map(([k, v, c]) => (
-            <div key={k} className="bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm border border-slate-100">
-              <div>
-                <p className="text-sm font-semibold text-slate-700">{k}</p>
-                <p className="text-xs text-slate-400">{v}</p>
-              </div>
-              <Chip label={c === 'warning' ? 'Review' : c === 'danger' ? 'Alert' : 'Normal'} variant={c as any} />
-            </div>
-          ))}
-        </div>
+        <KpiCard icon={Users} label="Total Passengers" value={summary?.totalPassengers?.toLocaleString() || '0'} sub="Registered" color="blue" />
+        <KpiCard icon={Bus} label="Total Drivers" value={summary?.totalDrivers?.toLocaleString() || '0'} sub="Registered" color="green" />
+        <KpiCard icon={Map} label="Terminals" value={summary?.totalTerminals?.toLocaleString() || '0'} sub="Registered" color="purple" />
+        <KpiCard icon={DollarSign} label="Total Revenue" value={`₱${(summary?.totalRevenue || 0).toLocaleString()}`} sub="All time" color="green" />
+        <KpiCard icon={CreditCard} label="Transactions" value={summary?.totalTransactions?.toLocaleString() || '0'} sub="All time" color="blue" />
       </div>
 
       {/* Recent transactions */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <p className="font-poppins font-bold text-slate-800">Recent Transactions</p>
-          <Btn variant="ghost" size="sm"><Eye size={13} /> View All</Btn>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {['Transaction ID', 'Passenger', 'Type', 'Amount', 'Status', 'Date'].map(h => (
-                <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {recentTx.map((t, i) => (
-                <tr key={t.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === recentTx.length - 1 ? 'border-0' : ''}`}>
-                  <td className="px-5 py-3.5 font-mono text-xs text-blue-600 font-semibold whitespace-nowrap">{t.id}</td>
-                  <td className="px-5 py-3.5 font-medium text-slate-800 whitespace-nowrap">{t.passenger}</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <Chip label={t.type} variant={t.type === 'Fare' ? 'info' : t.type === 'Top Up' ? 'success' : 'warning'} />
-                  </td>
-                  <td className={`px-5 py-3.5 font-bold whitespace-nowrap ${t.type === 'Fare' ? 'text-slate-800' : 'text-green-600'}`}>
-                    {t.type === 'Fare' ? '-' : '+'}₱{t.amount}
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <Chip label={t.status} variant={t.status === 'completed' ? 'success' : 'warning'} />
-                  </td>
-                  <td className="px-5 py-3.5 text-slate-400 text-xs whitespace-nowrap">{t.date}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {recentTx.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">
+            <CreditCard size={48} className="mx-auto mb-3 text-slate-300" />
+            <p className="font-semibold">No transactions yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-slate-100 bg-slate-50">
+                {['Passenger', 'Type', 'Amount', 'Date'].map(h => (
+                  <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {recentTx.map((t, i) => (
+                  <tr key={t.transactionId} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === recentTx.length - 1 ? 'border-0' : ''}`}>
+                    <td className="px-5 py-3.5 font-medium text-slate-800 whitespace-nowrap">{t.passengerName || '—'}</td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <Chip label={t.transactionType} variant={t.transactionType === 'PAYMENT' ? 'info' : t.transactionType === 'TOP_UP' ? 'success' : 'warning'} />
+                    </td>
+                    <td className={`px-5 py-3.5 font-bold whitespace-nowrap ${t.transactionType === 'TOP_UP' ? 'text-green-600' : 'text-slate-800'}`}>
+                      {t.transactionType === 'TOP_UP' ? '+' : '-'}₱{Math.abs(t.amount).toFixed(2)}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-400 text-xs whitespace-nowrap">
+                      {new Date(t.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ── USERS ─────────────────────────────────────────────────────────────────────
+// ── PASSENGERS (formerly Users) ────────────────────────────────────────────────
 
-const passengers = [
-  { id: 'USR-4821', name: 'Juan Dela Cruz', mobile: '09171234567', balance: 476.50, trips: 312, status: 'active', joined: 'Mar 2025' },
-  { id: 'USR-4822', name: 'Maria Santos', mobile: '09281234567', balance: 210.00, trips: 88, status: 'active', joined: 'Apr 2025' },
-  { id: 'USR-4823', name: 'Pedro Reyes', mobile: '09091234567', balance: 55.25, trips: 420, status: 'active', joined: 'Jan 2025' },
-  { id: 'USR-4824', name: 'Anna Cruz', mobile: '09181234567', balance: 890.75, trips: 156, status: 'suspended', joined: 'Jun 2025' },
-  { id: 'USR-4825', name: 'Carlo Tan', mobile: '09271234567', balance: 123.00, trips: 67, status: 'active', joined: 'Jul 2025' },
-]
-
-function UsersView() {
+function PassengersView() {
+  const [users, setUsers] = useState<AppUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
+  const [addCreditUser, setAddCreditUser] = useState<AppUser | null>(null)
+  const [creditAmount, setCreditAmount] = useState('')
+  const [creditLoading, setCreditLoading] = useState(false)
+  const [creditError, setCreditError] = useState('')
+
+  useEffect(() => {
+    loadUsers()
+  }, [])
+
+  const loadUsers = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await adminService.getUsers(1, 50)
+      setUsers(result.data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load passengers')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleToggleStatus = async (userId: number, isActive: boolean) => {
+    try {
+      if (isActive) {
+        await adminService.deactivateUser(userId)
+      } else {
+        await adminService.activateUser(userId)
+      }
+      await loadUsers()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update status')
+    }
+  }
+
+  const handleAddCredit = async () => {
+    if (!addCreditUser || !creditAmount) return
+    setCreditLoading(true)
+    setCreditError('')
+    try {
+      const card = await adminService.getCardByUserId(addCreditUser.userId)
+      await adminService.topUpWallet(card.cardId, parseFloat(creditAmount))
+      alert(`₱${parseFloat(creditAmount).toFixed(2)} added to ${addCreditUser.firstName} ${addCreditUser.lastName}'s wallet!`)
+      setAddCreditUser(null)
+      setCreditAmount('')
+    } catch (err) {
+      setCreditError(err instanceof Error ? err.message : 'Failed to add credit')
+    } finally {
+      setCreditLoading(false)
+    }
+  }
+
+  const filtered = users.filter(u => {
+    const name = `${u.firstName} ${u.lastName}`.toLowerCase()
+    const matchesSearch = name.includes(search.toLowerCase()) || u.username.toLowerCase().includes(search.toLowerCase())
+    const matchesFilter = filter === 'all' || (filter === 'active' ? u.isActive : !u.isActive)
+    return matchesSearch && matchesFilter
+  })
 
   return (
     <div className="flex flex-col gap-4">
@@ -365,47 +382,301 @@ function UsersView() {
         <div className="flex gap-2 items-center">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users..."
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search passengers..."
               className="pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 w-44 focus:outline-none focus:border-blue-400 transition-all" />
           </div>
-          <Btn variant="primary" size="md"><Plus size={14} /> Add User</Btn>
         </div>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
+        {loading ? (
+          <div className="p-8 text-center text-slate-500">
+            <RefreshCw size={24} className="mx-auto mb-3 text-blue-400 animate-spin" />
+            Loading passengers...
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center text-red-500">{error}</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">
+            <Users size={48} className="mx-auto mb-3 text-slate-300" />
+            <p className="font-semibold">No passengers found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-slate-100 bg-slate-50">
+                {['Passenger Name', 'Username', 'Status', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {filtered.map((u, i, arr) => (
+                  <tr key={u.userId} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+                          <span className="text-xs font-bold text-white">{u.firstName[0]}</span>
+                        </div>
+                        <span className="font-medium text-slate-800 whitespace-nowrap">{u.firstName} {u.lastName}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-500 font-mono text-xs whitespace-nowrap">{u.username}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <Chip label={u.isActive ? 'Active' : 'Suspended'} variant={u.isActive ? 'success' : 'danger'} />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleToggleStatus(u.userId, u.isActive)}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
+                          title={u.isActive ? 'Suspend' : 'Reactivate'}>
+                          {u.isActive ? <XCircle size={14} /> : <CheckCircle size={14} />}
+                        </button>
+                        <button onClick={() => { setAddCreditUser(u); setCreditAmount(''); setCreditError('') }}
+                          className="p-1.5 rounded-lg hover:bg-green-50 text-slate-400 hover:text-green-600 transition-colors"
+                          title="Add Credit">
+                          <Wallet size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Add Credit Modal */}
+      {addCreditUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-poppins font-bold text-xl text-slate-800">Add Credit</h3>
+              <button onClick={() => setAddCreditUser(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+                  <span className="text-sm font-bold text-white">{addCreditUser.firstName[0]}</span>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800">{addCreditUser.firstName} {addCreditUser.lastName}</p>
+                  <p className="text-xs text-slate-500 font-mono">{addCreditUser.username}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 mb-2 block">Amount (₱)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={creditAmount}
+                  onChange={e => setCreditAmount(e.target.value)}
+                  placeholder="Enter amount to add"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 transition-all"
+                />
+                <p className="text-xs text-slate-500 mt-1">This will be added to the passenger's wallet balance.</p>
+              </div>
+
+              {creditError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
+                  <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-600">{creditError}</p>
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                <Btn variant="secondary" size="lg" className="flex-1" onClick={() => setAddCreditUser(null)}>
+                  Cancel
+                </Btn>
+                <Btn variant="primary" size="lg" className="flex-1" onClick={handleAddCredit} disabled={!creditAmount || creditLoading}>
+                  {creditLoading ? 'Adding...' : 'Add Credit'}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── DRIVERS ───────────────────────────────────────────────────────────────────
+
+function DriversView({ onAddDriver }: { onAddDriver: () => void }) {
+  const [drivers, setDrivers] = useState<Driver[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    loadDrivers()
+  }, [])
+
+  const loadDrivers = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await adminService.getDrivers()
+      setDrivers(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load drivers')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleToggleStatus = async (driverId: number, isActive: boolean) => {
+    try {
+      if (isActive) {
+        await adminService.deactivateUser(driverId)
+      } else {
+        await adminService.activateUser(driverId)
+      }
+      await loadDrivers()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update status')
+    }
+  }
+
+  const handleResetPassword = async (driver: Driver) => {
+    const newPassword = prompt(`Enter a new password for ${driver.firstName} ${driver.lastName} (${driver.username}):\n\nMinimum 8 characters.`)
+    if (newPassword === null) return // User cancelled
+    if (newPassword.length < 8) {
+      alert('Password must be at least 8 characters.')
+      return
+    }
+    try {
+      await adminService.resetPassword(driver.userId, newPassword)
+      alert(`Password changed successfully for ${driver.username}`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to change password')
+    }
+  }
+
+  const filtered = drivers.filter(d => {
+    const name = `${d.firstName} ${d.lastName}`.toLowerCase()
+    return name.includes(search.toLowerCase()) || d.username.toLowerCase().includes(search.toLowerCase())
+  })
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* All drivers table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <p className="font-poppins font-bold text-slate-800">All Drivers</p>
+          <div className="flex gap-2">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search drivers..." className="pl-9 pr-4 py-1.5 text-sm rounded-xl border border-slate-200 w-40 focus:outline-none focus:border-blue-400" />
+            </div>
+            <Btn variant="primary" size="sm" onClick={onAddDriver}><Plus size={13} /> Add Driver</Btn>
+          </div>
+        </div>
+        {loading ? (
+          <div className="p-8 text-center text-slate-500">
+            <RefreshCw size={24} className="mx-auto mb-3 text-blue-400 animate-spin" />
+            Loading drivers...
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center text-red-500">{error}</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">
+            <Bus size={48} className="mx-auto mb-3 text-slate-300" />
+            <p className="font-semibold">No drivers found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-slate-100 bg-slate-50">
+                {['Driver Name', 'Driver ID', 'Status', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {filtered.map((d, i, arr) => (
+                  <tr key={d.userId} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+                          <span className="text-xs font-bold text-white">{d.firstName[0]}</span>
+                        </div>
+                        <span className="font-medium text-slate-800 whitespace-nowrap">{d.firstName} {d.lastName}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 font-mono text-xs text-blue-600 font-semibold">{d.username}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <Chip label={d.isActive ? 'Active' : 'Suspended'} variant={d.isActive ? 'success' : 'danger'} />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleToggleStatus(d.userId, d.isActive)}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
+                          title={d.isActive ? 'Suspend' : 'Reactivate'}>
+                          {d.isActive ? <XCircle size={14} /> : <CheckCircle size={14} />}
+                        </button>
+                        <button onClick={() => handleResetPassword(d)}
+                          className="p-1.5 rounded-lg hover:bg-yellow-50 text-slate-400 hover:text-yellow-600 transition-colors"
+                          title="Change Password">
+                          <Lock size={14} />
+                        </button>
+                        <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors" title="View Details">
+                          <Eye size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── TERMINALS & STATIONS ──────────────────────────────────────────────────────
+
+function TerminalsView({ onAddTerminal, terminals, onEdit, onDelete }: {
+  onAddTerminal: () => void; terminals: Terminal[]; onEdit: (terminal: Terminal) => void; onDelete: (terminalId: number) => void
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-between items-center">
+        <div />
+        <Btn variant="primary" onClick={onAddTerminal}><Plus size={14} /> Add Terminal</Btn>
+      </div>
+      {terminals.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center text-slate-500">
+          <Map size={48} className="mx-auto mb-3 text-slate-300" />
+          <p className="font-semibold">No terminals found</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {['User ID', 'Name', 'Mobile', 'Balance', 'Trips', 'Status', 'Joined', 'Actions'].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-              ))}
+              <th className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Terminal ID</th>
+              <th className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Terminal Name</th>
+              <th className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
             </tr></thead>
             <tbody>
-              {passengers.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) && (filter === 'all' || p.status === filter)).map((p, i, arr) => (
-                <tr key={p.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
-                  <td className="px-4 py-3.5 font-mono text-xs text-blue-600 font-semibold">{p.id}</td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
-                        <span className="text-xs font-bold text-white">{p.name[0]}</span>
-                      </div>
-                      <span className="font-medium text-slate-800 whitespace-nowrap">{p.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 text-slate-500 font-mono text-xs whitespace-nowrap">{p.mobile}</td>
-                  <td className="px-4 py-3.5 font-semibold text-slate-800 whitespace-nowrap">₱{p.balance.toFixed(2)}</td>
-                  <td className="px-4 py-3.5 text-slate-600">{p.trips}</td>
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <Chip label={p.status} variant={p.status === 'active' ? 'success' : 'danger'} />
-                  </td>
-                  <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">{p.joined}</td>
-                  <td className="px-4 py-3.5">
+              {terminals.map((t, i, arr) => (
+                <tr key={t.terminalId} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
+                  <td className="px-5 py-3.5 font-mono text-xs text-blue-600 font-semibold">TRM-{t.terminalId.toString().padStart(2, '0')}</td>
+                  <td className="px-5 py-3.5 font-medium text-slate-800">{t.terminalName}</td>
+                  <td className="px-5 py-3.5">
                     <div className="flex items-center gap-1">
-                      <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"><Eye size={14} /></button>
-                      <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"><Edit2 size={14} /></button>
-                      <button className={`p-1.5 rounded-lg transition-colors ${p.status === 'active' ? 'hover:bg-red-50 text-slate-400 hover:text-red-500' : 'hover:bg-green-50 text-slate-400 hover:text-green-600'}`}>
-                        {p.status === 'active' ? <XCircle size={14} /> : <CheckCircle size={14} />}
+                      <button onClick={() => onEdit(t)} className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors" title="Edit Terminal">
+                        <Edit2 size={14} />
+                      </button>
+                      <button onClick={() => onDelete(t.terminalId)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors" title="Delete Terminal">
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </td>
@@ -414,236 +685,88 @@ function UsersView() {
             </tbody>
           </table>
         </div>
-      </div>
+      )}
     </div>
   )
 }
 
-// ── DRIVERS ───────────────────────────────────────────────────────────────────
-
-const drivers = [
-  { id: 'DRV-001', name: 'Pedro Santos', mobile: '09171111111', vehicle: 'Bus #42', plate: 'ABC-1234', trips: 1840, earnings: '₱42,800', status: 'active', approval: 'approved' },
-  { id: 'DRV-002', name: 'Carlos Rivera', mobile: '09282222222', vehicle: 'Bus #07', plate: 'XYZ-5678', trips: 1102, earnings: '₱28,400', status: 'active', approval: 'approved' },
-  { id: 'DRV-003', name: 'Jose Mendoza', mobile: '09093333333', vehicle: 'Bus #15', plate: 'DEF-9012', trips: 0, earnings: '₱0', status: 'pending', approval: 'pending' },
-  { id: 'DRV-004', name: 'Rico Barretto', mobile: '09184444444', vehicle: 'Bus #31', plate: 'GHI-3456', trips: 2240, earnings: '₱58,200', status: 'active', approval: 'approved' },
-  { id: 'DRV-005', name: 'Leo Villanueva', mobile: '09275555555', vehicle: 'N/A', plate: 'N/A', trips: 0, earnings: '₱0', status: 'pending', approval: 'pending' },
-]
-
-function DriversView({ onAddDriver }: { onAddDriver: () => void }) {
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Pending section */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <AlertCircle size={16} className="text-yellow-600" />
-          <p className="font-poppins font-semibold text-slate-800 text-sm">Pending Driver Approvals (2)</p>
-        </div>
-        <div className="flex flex-col gap-2">
-          {drivers.filter(d => d.approval === 'pending').map(d => (
-            <div key={d.id} className="bg-white rounded-xl p-3.5 flex items-center gap-3 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center shrink-0">
-                <span className="font-bold text-yellow-700 text-sm">{d.name[0]}</span>
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-slate-800 text-sm">{d.name}</p>
-                <p className="text-xs text-slate-400">{d.mobile}</p>
-              </div>
-              <div className="flex gap-2">
-                <Btn variant="primary" size="sm" onClick={() => {}}><CheckCircle size={13} /> Approve</Btn>
-                <Btn variant="danger" size="sm" onClick={() => {}}><XCircle size={13} /> Reject</Btn>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* All drivers table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <p className="font-poppins font-bold text-slate-800">All Drivers</p>
-          <div className="flex gap-2">
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input placeholder="Search drivers..." className="pl-9 pr-4 py-1.5 text-sm rounded-xl border border-slate-200 w-40 focus:outline-none focus:border-blue-400" />
-            </div>
-            <Btn variant="primary" size="sm" onClick={onAddDriver}><Plus size={13} /> Add Driver</Btn>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {['Driver ID', 'Name', 'Vehicle', 'Plate No.', 'Total Trips', 'Earnings', 'Status', 'Actions'].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {drivers.map((d, i, arr) => (
-                <tr key={d.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
-                  <td className="px-4 py-3.5 font-mono text-xs text-blue-600 font-semibold">{d.id}</td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
-                        <span className="text-xs font-bold text-white">{d.name[0]}</span>
-                      </div>
-                      <span className="font-medium text-slate-800 whitespace-nowrap">{d.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{d.vehicle}</td>
-                  <td className="px-4 py-3.5 font-mono text-xs text-slate-600 whitespace-nowrap">{d.plate}</td>
-                  <td className="px-4 py-3.5 text-slate-600">{d.trips}</td>
-                  <td className="px-4 py-3.5 font-semibold text-slate-800 whitespace-nowrap">{d.earnings}</td>
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <Chip label={d.approval === 'pending' ? 'Pending' : d.status} variant={d.approval === 'pending' ? 'warning' : 'success'} />
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1">
-                      <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"><Eye size={14} /></button>
-                      <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"><Edit2 size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── TOWNS & STATIONS ──────────────────────────────────────────────────────────
-
-const towns = [
-  { id: 'TWN-01', name: 'Quezon City', stations: 4, status: 'active' },
-  { id: 'TWN-02', name: 'Marikina', stations: 3, status: 'active' },
-  { id: 'TWN-03', name: 'Pasig', stations: 3, status: 'active' },
-  { id: 'TWN-04', name: 'Mandaluyong', stations: 3, status: 'active' },
-  { id: 'TWN-05', name: 'Manila', stations: 4, status: 'active' },
-  { id: 'TWN-06', name: 'Parañaque', stations: 3, status: 'inactive' },
-]
-
-function TownsView({ onAddTown }: { onAddTown: () => void }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <div />
-        <Btn variant="primary" onClick={onAddTown}><Plus size={14} /> Add Town</Btn>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {towns.map(t => (
-          <div key={t.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 card-hover">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center">
-                <Map size={18} className="text-blue-600" />
-              </div>
-              <Chip label={t.status} variant={t.status === 'active' ? 'success' : 'default'} />
-            </div>
-            <p className="font-poppins font-bold text-slate-800">{t.name}</p>
-            <p className="text-xs text-slate-400 mt-1">{t.id} · {t.stations} stations</p>
-            <div className="flex gap-2 mt-4">
-              <Btn variant="ghost" size="sm" className="flex-1"><Edit2 size={12} /> Edit</Btn>
-              <Btn variant="danger" size="sm" className="flex-1"><Trash2 size={12} /> Delete</Btn>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function StationsView({ onAddStation }: { onAddStation: () => void }) {
-  const [stations] = useState([
-    { id: 'STN-01', name: 'Cubao Station', town: 'Quezon City', status: 'active' },
-    { id: 'STN-02', name: 'Commonwealth', town: 'Quezon City', status: 'active' },
-    { id: 'STN-03', name: 'Fairview Terminal', town: 'Quezon City', status: 'active' },
-    { id: 'STN-04', name: 'Marikina Station', town: 'Marikina', status: 'active' },
-    { id: 'STN-05', name: 'Ortigas Station', town: 'Pasig', status: 'active' },
-    { id: 'STN-06', name: 'Shaw Station', town: 'Pasig', status: 'inactive' },
-  ])
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input placeholder="Search stations..." className="pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 w-48 focus:outline-none focus:border-blue-400" />
-        </div>
-        <Btn variant="primary" onClick={onAddStation}><Plus size={14} /> Add Station</Btn>
-      </div>
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b border-slate-100 bg-slate-50">
-            {['Station ID', 'Station Name', 'Town', 'Status', 'Actions'].map(h => (
-              <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
-            ))}
-          </tr></thead>
-          <tbody>
-            {stations.map((s, i, arr) => (
-              <tr key={s.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
-                <td className="px-5 py-3.5 font-mono text-xs text-blue-600 font-semibold">{s.id}</td>
-                <td className="px-5 py-3.5 font-medium text-slate-800">{s.name}</td>
-                <td className="px-5 py-3.5 text-slate-500">{s.town}</td>
-                <td className="px-5 py-3.5"><Chip label={s.status} variant={s.status === 'active' ? 'success' : 'default'} /></td>
-                <td className="px-5 py-3.5">
-                  <div className="flex items-center gap-1">
-                    <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"><Edit2 size={14} /></button>
-                    <button className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
 
 // ── FARE MATRIX ───────────────────────────────────────────────────────────────
 
-const fares = [
-  { id: 'FM-01', origin: 'Cubao Station', dest: 'Ortigas Station', vehicle: 'Bus', type: 'Regular', amount: 23, effective: 'Jan 1, 2026', status: 'active' },
-  { id: 'FM-02', origin: 'Cubao Station', dest: 'Ortigas Station', vehicle: 'Bus', type: 'Student', amount: 16, effective: 'Jan 1, 2026', status: 'active' },
-  { id: 'FM-03', origin: 'Cubao Station', dest: 'Airport Link', vehicle: 'Bus', type: 'Regular', amount: 38, effective: 'Jan 1, 2026', status: 'active' },
-  { id: 'FM-04', origin: 'Marikina Station', dest: 'Cubao Station', vehicle: 'Bus', type: 'Regular', amount: 18, effective: 'Jan 1, 2026', status: 'active' },
-  { id: 'FM-05', origin: 'Lawton Station', dest: 'Shaw Station', vehicle: 'Bus', type: 'PWD', amount: 11, effective: 'Jan 1, 2026', status: 'active' },
-]
+function FareMatrixView({ onAddFareRule, onEditFareRule, onDeleteFareRule }: {
+  onAddFareRule: () => void; onEditFareRule: (fare: FareRule) => void; onDeleteFareRule: (fareId: number) => void
+}) {
+  const [fares, setFares] = useState<FareRule[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-function FareMatrixView({ onAddFareRule }: { onAddFareRule: () => void }) {
+  useEffect(() => {
+    loadFares()
+  }, [])
+
+  const loadFares = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await adminService.getFareRules()
+      setFares(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load fare rules')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <Btn variant="primary" onClick={onAddFareRule}><Plus size={14} /> Add Fare Rule</Btn>
       </div>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {['ID', 'Origin Station', 'Destination', 'Vehicle', 'Passenger Type', 'Fare', 'Effective', 'Status', 'Actions'].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {fares.map((f, i, arr) => (
-                <tr key={f.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
-                  <td className="px-4 py-3.5 font-mono text-xs text-blue-600">{f.id}</td>
-                  <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{f.origin}</td>
-                  <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{f.dest}</td>
-                  <td className="px-4 py-3.5 text-slate-600">{f.vehicle}</td>
-                  <td className="px-4 py-3.5"><Chip label={f.type} variant={f.type === 'Regular' ? 'default' : f.type === 'Student' ? 'info' : 'success'} /></td>
-                  <td className="px-4 py-3.5 font-poppins font-bold text-slate-800">₱{f.amount}.00</td>
-                  <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">{f.effective}</td>
-                  <td className="px-4 py-3.5"><Chip label={f.status} variant="success" /></td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex gap-1">
-                      <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"><Edit2 size={14} /></button>
-                      <button className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><XCircle size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <div className="p-8 text-center text-slate-500">
+            <RefreshCw size={24} className="mx-auto mb-3 text-blue-400 animate-spin" />
+            Loading fare rules...
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center text-red-500">{error}</div>
+        ) : fares.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">
+            <Grid3X3 size={48} className="mx-auto mb-3 text-slate-300" />
+            <p className="font-semibold">No fare rules found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-slate-100 bg-slate-50">
+                {['Origin Terminal', 'Destination', 'Fare', 'Effective', 'Status', 'Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {fares.map((f, i, arr) => (
+                  <tr key={f.fareId} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
+                    <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{f.originTerminalName}</td>
+                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{f.destinationTerminalName}</td>
+                    <td className="px-4 py-3.5 font-poppins font-bold text-slate-800">₱{f.fareAmount.toFixed(2)}</td>
+                    <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">{new Date(f.effectiveDate).toLocaleDateString()}</td>
+                    <td className="px-4 py-3.5"><Chip label={f.isActive ? 'Active' : 'Inactive'} variant={f.isActive ? 'success' : 'default'} /></td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => onEditFareRule(f)} className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors" title="Edit Fare Rule">
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => onDeleteFareRule(f.fareId)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors" title="Delete Fare Rule">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -651,26 +774,37 @@ function FareMatrixView({ onAddFareRule }: { onAddFareRule: () => void }) {
 
 // ── TRANSACTIONS ──────────────────────────────────────────────────────────────
 
-const allTx = [
-  { id: 'TX-8821', passenger: 'Juan Dela Cruz', type: 'Fare', amount: -23, status: 'completed', date: 'Aug 2, 10:14 AM' },
-  { id: 'TX-8820', passenger: 'Maria Santos', type: 'Top Up', amount: 500, status: 'completed', date: 'Aug 2, 10:02 AM' },
-  { id: 'TX-8819', passenger: 'Pedro Reyes', type: 'Fare', amount: -18, status: 'completed', date: 'Aug 2, 09:55 AM' },
-  { id: 'TX-8818', passenger: 'Anna Cruz', type: 'Refund', amount: 23, status: 'completed', date: 'Aug 2, 09:40 AM' },
-  { id: 'TX-8817', passenger: 'Carlo Tan', type: 'Fare', amount: -28, status: 'pending', date: 'Aug 2, 09:30 AM' },
-  { id: 'TX-8816', passenger: 'Juan Dela Cruz', type: 'Top Up', amount: 300, status: 'completed', date: 'Aug 1, 08:10 PM' },
-  { id: 'TX-8815', passenger: 'Maria Santos', type: 'Fare', amount: -13, status: 'failed', date: 'Aug 1, 07:55 PM' },
-]
-
 function TransactionsView() {
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
 
-  const filtered = allTx.filter(t =>
-    (typeFilter === 'all' || t.type.toLowerCase() === typeFilter) &&
-    (statusFilter === 'all' || t.status === statusFilter) &&
-    (search === '' || t.id.toLowerCase().includes(search.toLowerCase()) || t.passenger.toLowerCase().includes(search.toLowerCase()))
-  )
+  useEffect(() => {
+    loadTransactions()
+  }, [])
+
+  const loadTransactions = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await adminService.getTransactions(1, 50)
+      setTransactions(result.data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load transactions')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = transactions.filter(t => {
+    const matchesType = typeFilter === 'all' || t.transactionType.toLowerCase() === typeFilter
+    const matchesSearch = search === '' ||
+      t.passengerName?.toLowerCase().includes(search.toLowerCase()) ||
+      t.transactionId.toString().includes(search)
+    return matchesType && matchesSearch
+  })
 
   return (
     <div className="flex flex-col gap-4">
@@ -678,65 +812,63 @@ function TransactionsView() {
         <div className="flex gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500 font-semibold">Type:</span>
-            {['all', 'fare', 'top up', 'refund'].map(f => (
+            {['all', 'payment', 'top_up', 'refund'].map(f => (
               <button key={f} onClick={() => setTypeFilter(f)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${typeFilter === f ? 'bg-blue-600 text-white' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-semibold">Status:</span>
-            {['all', 'completed', 'pending', 'failed'].map(f => (
-              <button key={f} onClick={() => setStatusFilter(f)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${statusFilter === f ? 'bg-blue-600 text-white' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {f === 'top_up' ? 'Top Up' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
           </div>
         </div>
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by TRN or passenger..." className="pl-9 pr-4 py-1.5 text-sm rounded-xl border border-slate-200 w-56 focus:outline-none focus:border-blue-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by passenger or TX ID..." className="pl-9 pr-4 py-1.5 text-sm rounded-xl border border-slate-200 w-56 focus:outline-none focus:border-blue-400" />
         </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-slate-100 bg-slate-50">
-              {['TX ID', 'Passenger', 'Type', 'Amount', 'Status', 'Date', 'Actions'].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {filtered.map((t, i, arr) => (
-                <tr key={t.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
-                  <td className="px-4 py-3.5 font-mono text-xs text-blue-600 font-semibold">{t.id}</td>
-                  <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{t.passenger}</td>
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <Chip label={t.type} variant={t.type === 'Fare' ? 'info' : t.type === 'Top Up' ? 'success' : 'warning'} />
-                  </td>
-                  <td className={`px-4 py-3.5 font-bold whitespace-nowrap ${t.amount > 0 ? 'text-green-600' : 'text-slate-800'}`}>
-                    {t.amount > 0 ? '+' : ''}₱{Math.abs(t.amount)}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <Chip label={t.status} variant={t.status === 'completed' ? 'success' : t.status === 'pending' ? 'warning' : 'danger'} />
-                  </td>
-                  <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">{t.date}</td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1">
-                      <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"><Eye size={14} /></button>
-                      {t.type === 'Fare' && t.status === 'completed' && (
-                        <button className="p-1.5 rounded-lg hover:bg-orange-50 text-slate-400 hover:text-orange-500 transition-colors"><ArrowDownLeft size={14} /></button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <div className="p-8 text-center text-slate-500">
+            <RefreshCw size={24} className="mx-auto mb-3 text-blue-400 animate-spin" />
+            Loading transactions...
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center text-red-500">{error}</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">
+            <CreditCard size={48} className="mx-auto mb-3 text-slate-300" />
+            <p className="font-semibold">No transactions found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-slate-100 bg-slate-50">
+                {['TX ID', 'Passenger Name', 'Origin', 'Destination', 'Transaction Type', 'Amount', 'Date'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {filtered.map((t, i, arr) => (
+                  <tr key={t.transactionId} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${i === arr.length - 1 ? 'border-0' : ''}`}>
+                    <td className="px-4 py-3.5 font-mono text-xs text-blue-600 font-semibold">TX-{t.transactionId.toString().padStart(6, '0')}</td>
+                    <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{t.passengerName || '—'}</td>
+                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{t.originTerminalName || '—'}</td>
+                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">{t.destinationTerminalName || '—'}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <Chip label={t.transactionType} variant={t.transactionType === 'PAYMENT' ? 'info' : t.transactionType === 'TOP_UP' ? 'success' : 'warning'} />
+                    </td>
+                    <td className={`px-4 py-3.5 font-bold whitespace-nowrap ${t.transactionType === 'TOP_UP' ? 'text-green-600' : 'text-slate-800'}`}>
+                      {t.transactionType === 'TOP_UP' ? '+' : '-'}₱{Math.abs(t.amount).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
+                      {new Date(t.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -745,62 +877,80 @@ function TransactionsView() {
 // ── REPORTS ───────────────────────────────────────────────────────────────────
 
 function ReportsView() {
-  const [period, setPeriod] = useState('daily')
+  const [summary, setSummary] = useState<ReportSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const data = {
-    daily: [{ date: 'Aug 2', revenue: 12845, trips: 1042 }, { date: 'Aug 1', revenue: 11200, trips: 962 }, { date: 'Jul 31', revenue: 13400, trips: 1124 }],
-    weekly: [{ date: 'Week 31', revenue: 84200, trips: 7128 }, { date: 'Week 30', revenue: 78400, trips: 6640 }, { date: 'Week 29', revenue: 81900, trips: 6942 }],
-    monthly: [{ date: 'August', revenue: 284920, trips: 24190 }, { date: 'July', revenue: 298400, trips: 25280 }, { date: 'June', revenue: 271000, trips: 22980 }],
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const data = await adminService.getReportSummary()
+        setSummary(data)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load report')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <RefreshCw size={32} className="text-blue-400 animate-spin" />
+      </div>
+    )
   }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-2">
+        <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+        <p className="text-xs text-red-600">{error}</p>
+      </div>
+    )
+  }
+
+  const avgFare = summary && summary.totalTransactions > 0 ? summary.totalRevenue / summary.totalTransactions : 0
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex gap-2">
-          {['daily', 'weekly', 'monthly'].map(p => (
-            <button key={p} onClick={() => setPeriod(p)}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${period === p ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}>
-              {p.charAt(0).toUpperCase() + p.slice(1)}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <Btn variant="secondary" size="md"><Download size={14} /> Export PDF</Btn>
-          <Btn variant="primary" size="md"><Download size={14} /> Export Excel</Btn>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {[['Total Revenue', `₱${(data[period as keyof typeof data][0].revenue).toLocaleString()}`, '+12%', 'green'],
-          ['Total Trips', data[period as keyof typeof data][0].trips.toLocaleString(), '+5%', 'blue'],
-          ['Avg per Trip', `₱${(data[period as keyof typeof data][0].revenue / data[period as keyof typeof data][0].trips).toFixed(2)}`, '+7%', 'purple']].map(([k, v, t, c]) => (
+        {[['Total Revenue', `₱${(summary?.totalRevenue || 0).toLocaleString()}`],
+          ['Total Transactions', (summary?.totalTransactions || 0).toLocaleString()],
+          ['Avg per Transaction', `₱${avgFare.toFixed(2)}`]].map(([k, v]) => (
           <div key={k} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
             <p className="text-sm text-slate-500 font-medium">{k}</p>
             <p className="font-poppins text-2xl font-bold text-slate-800 mt-1">{v}</p>
-            <p className={`text-xs font-semibold mt-1 ${c === 'green' ? 'text-green-600' : c === 'blue' ? 'text-blue-600' : 'text-purple-600'}`}>{t} vs prev</p>
           </div>
         ))}
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100">
-          <p className="font-poppins font-bold text-slate-800">Revenue Report</p>
-          <p className="text-xs text-slate-400 mt-0.5">{period.charAt(0).toUpperCase() + period.slice(1)} breakdown</p>
+          <p className="font-poppins font-bold text-slate-800">System Summary</p>
+          <p className="text-xs text-slate-400 mt-0.5">Live data from the backend</p>
         </div>
         <table className="w-full text-sm">
           <thead><tr className="border-b border-slate-100 bg-slate-50">
-            {['Period', 'Revenue', 'Trips', 'Avg Fare', 'Growth'].map(h => (
+            {['Metric', 'Value'].map(h => (
               <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {data[period as keyof typeof data].map((r, i, arr) => (
-              <tr key={r.date} className={`border-b border-slate-100 hover:bg-blue-50/40 ${i === arr.length - 1 ? 'border-0' : ''}`}>
-                <td className="px-5 py-4 font-semibold text-slate-800">{r.date}</td>
-                <td className="px-5 py-4 font-poppins font-bold text-slate-800">₱{r.revenue.toLocaleString()}</td>
-                <td className="px-5 py-4 text-slate-600">{r.trips.toLocaleString()}</td>
-                <td className="px-5 py-4 text-slate-600">₱{(r.revenue / r.trips).toFixed(2)}</td>
-                <td className="px-5 py-4"><Chip label="+12%" variant="success" /></td>
+            {[
+              ['Total Passengers', (summary?.totalPassengers || 0).toLocaleString()],
+              ['Total Drivers', (summary?.totalDrivers || 0).toLocaleString()],
+              ['Total Terminals', (summary?.totalTerminals || 0).toLocaleString()],
+              ['Total Transactions', (summary?.totalTransactions || 0).toLocaleString()],
+              ['Total Revenue', `₱${(summary?.totalRevenue || 0).toLocaleString()}`],
+            ].map(([k, v], i, arr) => (
+              <tr key={k} className={`border-b border-slate-100 hover:bg-blue-50/40 ${i === arr.length - 1 ? 'border-0' : ''}`}>
+                <td className="px-5 py-4 font-semibold text-slate-800">{k}</td>
+                <td className="px-5 py-4 font-poppins font-bold text-slate-800">{v}</td>
               </tr>
             ))}
           </tbody>
@@ -842,29 +992,38 @@ function SettingsView() {
 export default function AdminApp() {
   const [section, setSection] = useState<AdminSection>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated())
-  const [loginMobile, setLoginMobile] = useState('')
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authChecking, setAuthChecking] = useState(true)
+  const [loginUsername, setLoginUsername] = useState('')
   const [loginPass, setLoginPass] = useState('')
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
 
+  // Validate token on app startup — prevents skipping login with stale tokens
+  useEffect(() => {
+    const checkAuth = async () => {
+      const valid = await authService.validateToken()
+      setIsAuthenticated(valid)
+      setAuthChecking(false)
+    }
+    checkAuth()
+  }, [])
+
   // Modal states
-  const [isStationModalOpen, setIsStationModalOpen] = useState(false)
   const [isDriverModalOpen, setIsDriverModalOpen] = useState(false)
-  const [isTownModalOpen, setIsTownModalOpen] = useState(false)
+  const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false)
   const [isFareRuleModalOpen, setIsFareRuleModalOpen] = useState(false)
-  const [isTripModalOpen, setIsTripModalOpen] = useState(false)
+  const [editingTerminal, setEditingTerminal] = useState<Terminal | null>(null)
+  const [editingFareRule, setEditingFareRule] = useState<FareRule | null>(null)
   const [isDiscountTypeModalOpen, setIsDiscountTypeModalOpen] = useState(false)
 
   // Loading states
-  const [stationLoading, setStationLoading] = useState(false)
   const [driverLoading, setDriverLoading] = useState(false)
-  const [townLoading, setTownLoading] = useState(false)
+  const [terminalLoading, setTerminalLoading] = useState(false)
   const [fareRuleLoading, setFareRuleLoading] = useState(false)
 
   // Data states
-  const [towns, setTowns] = useState<Town[]>([])
-  const [stations, setStations] = useState<Station[]>([])
+  const [terminals, setTerminals] = useState<Terminal[]>([])
 
   // Toast notifications
   const { toasts, removeToast, success, error: showError } = useToast()
@@ -873,7 +1032,7 @@ export default function AdminApp() {
     setLoginLoading(true)
     setLoginError('')
     try {
-      await authService.login({ mobileNumber: loginMobile, password: loginPass })
+      await authService.login({ username: loginUsername, password: loginPass })
       setIsAuthenticated(true)
     } catch (err) {
       setLoginError(err instanceof Error ? err.message : 'Login failed')
@@ -883,48 +1042,102 @@ export default function AdminApp() {
   }
 
   const handleLogout = () => {
-    authService.logout()
-    setIsAuthenticated(false)
+    authService.logout().then(() => setIsAuthenticated(false))
   }
 
   // Load initial data
   useEffect(() => {
     if (!isAuthenticated) return
-    loadTowns()
-    loadStations()
+    loadTerminals()
+    loadDrivers()
+    loadFares()
   }, [isAuthenticated])
 
-  const loadTowns = async () => {
+  const loadTerminals = async () => {
     try {
-      const data = await adminService.getTowns()
-      setTowns(data)
+      const data = await adminService.getTerminals()
+      setTerminals(data)
     } catch (err) {
-      console.error('Failed to load towns:', err)
+      console.error('Failed to load terminals:', err)
     }
   }
 
-  const loadStations = async () => {
+  const loadDrivers = async () => {
     try {
-      const data = await adminService.getStations()
-      setStations(data)
+      await adminService.getDrivers()
     } catch (err) {
-      console.error('Failed to load stations:', err)
+      console.error('Failed to load drivers:', err)
     }
   }
 
-  // Handlers
-  const handleAddStation = async (data: { townId: number; stationName: string }) => {
-    setStationLoading(true)
+  const loadFares = async () => {
     try {
-      await adminService.createStation(data)
-      success('Station added successfully!')
-      await loadStations()
+      await adminService.getFareRules()
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to add station')
+      console.error('Failed to load fares:', err)
+    }
+  }
+
+  // ── Handlers: Terminals ─────────────────────────────────────────────────
+
+  const handleAddTerminal = async (data: { terminalName: string }) => {
+    setTerminalLoading(true)
+    try {
+      await adminService.createTerminal(data)
+      success('Terminal added successfully!')
+      setIsTerminalModalOpen(false)
+      await loadTerminals()
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to add terminal')
     } finally {
-      setStationLoading(false)
+      setTerminalLoading(false)
     }
   }
+
+  const handleEditTerminal = async (data: { terminalName: string }) => {
+    if (!editingTerminal) return
+    setTerminalLoading(true)
+    try {
+      await adminService.updateTerminal(editingTerminal.terminalId, data)
+      success('Terminal updated successfully!')
+      setIsTerminalModalOpen(false)
+      setEditingTerminal(null)
+      await loadTerminals()
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to update terminal')
+    } finally {
+      setTerminalLoading(false)
+    }
+  }
+
+  const handleDeleteTerminal = async (terminalId: number) => {
+    try {
+      // First call to check if terminal is used in fare rules
+      const response = await adminService.deleteTerminal(terminalId)
+      
+      // Check if backend requires confirmation (warning response)
+      if (response.warning && response.requiresConfirmation) {
+        const confirmed = confirm(
+          `${response.message}\n\nThis will permanently delete ${response.affectedFareRules} fare rule(s). This action cannot be undone.`
+        )
+        
+        if (!confirmed) return
+        
+        // User confirmed, call again with confirmation
+        await adminService.deleteTerminal(terminalId, true)
+        success(`Terminal and ${response.affectedFareRules} related fare rule(s) deleted successfully!`)
+      } else {
+        // No warning, deletion was successful
+        success('Terminal deleted successfully!')
+      }
+      
+      await loadTerminals()
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to delete terminal')
+    }
+  }
+
+  // ── Handlers: Drivers ───────────────────────────────────────────────────
 
   const handleAddDriver = async (data: {
     firstName: string
@@ -935,13 +1148,16 @@ export default function AdminApp() {
   }) => {
     setDriverLoading(true)
     try {
+      // The backend generates the Driver ID (e.g., DRV-000010) which becomes
+      // the driver's default password.
       await adminService.createDriver({
         firstName: data.firstName,
         lastName: data.lastName,
-        mobileNumber: data.mobileNumber,
-        password: 'Driver123!' // Default password for testing
+        mobileNumber: data.mobileNumber
       })
-      success('Driver added successfully! Default password: Driver123!')
+      success('Driver added successfully!')
+      setIsDriverModalOpen(false)
+      await loadDrivers()
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Failed to add driver')
     } finally {
@@ -949,24 +1165,11 @@ export default function AdminApp() {
     }
   }
 
-  const handleAddTown = async (data: { townName: string }) => {
-    setTownLoading(true)
-    try {
-      await adminService.createTown(data)
-      success('Town added successfully!')
-      await loadTowns()
-    } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to add town')
-    } finally {
-      setTownLoading(false)
-    }
-  }
+  // ── Handlers: Fare Rules ────────────────────────────────────────────────
 
   const handleAddFareRule = async (data: {
-    originStationId: number
-    destinationStationId: number
-    vehicleType: string
-    passengerType: string
+    originTerminalId: number
+    destinationTerminalId: number
     fareAmount: number
     effectiveDate: string
   }) => {
@@ -974,11 +1177,56 @@ export default function AdminApp() {
     try {
       await adminService.createFareRule(data)
       success('Fare rule added successfully!')
+      setIsFareRuleModalOpen(false)
+      await loadFares()
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Failed to add fare rule')
     } finally {
       setFareRuleLoading(false)
     }
+  }
+
+  const handleEditFareRule = async (data: {
+    originTerminalId: number
+    destinationTerminalId: number
+    fareAmount: number
+    effectiveDate: string
+  }) => {
+    if (!editingFareRule) return
+    setFareRuleLoading(true)
+    try {
+      await adminService.updateFareRule(editingFareRule.fareId, data)
+      success('Fare rule updated successfully!')
+      setIsFareRuleModalOpen(false)
+      setEditingFareRule(null)
+      await loadFares()
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to update fare rule')
+    } finally {
+      setFareRuleLoading(false)
+    }
+  }
+
+  const handleDeleteFareRule = async (fareId: number) => {
+    if (!confirm('Are you sure you want to delete this fare rule?')) return
+    try {
+      await adminService.deleteFareRule(fareId)
+      success('Fare rule deleted successfully!')
+      await loadFares()
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to delete fare rule')
+    }
+  }
+
+  if (authChecking) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#F0F4FF]">
+        <div className="flex flex-col items-center gap-4">
+          <RefreshCw size={40} className="text-blue-400 animate-spin" />
+          <p className="text-slate-600 font-poppins">Validating session...</p>
+        </div>
+      </div>
+    )
   }
 
   if (!isAuthenticated) {
@@ -996,13 +1244,13 @@ export default function AdminApp() {
           </div>
           <div className="p-6 flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mobile Number</label>
-              <input value={loginMobile} onChange={e => setLoginMobile(e.target.value)} placeholder="09171234567"
+              <label htmlFor="login-username" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Username</label>
+              <input id="login-username" value={loginUsername} onChange={e => setLoginUsername(e.target.value)} placeholder="Enter username"
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-400" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Password</label>
-              <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="Enter password"
+              <label htmlFor="login-password" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Password</label>
+              <input id="login-password" type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="Enter password"
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-400" />
             </div>
             {loginError && (
@@ -1015,7 +1263,7 @@ export default function AdminApp() {
               {loginLoading ? <><RefreshCw size={16} className="animate-spin" /> Signing in...</> : 'Sign In'}
             </Btn>
             <p className="text-center text-xs text-slate-400">
-              Default admin: mobile <span className="font-mono font-semibold">0000000000</span> / password <span className="font-mono font-semibold">Admin</span>
+              Admin credentials are set via the <span className="font-mono font-semibold">ADMIN_BOOTSTRAP_PASSWORD</span> environment variable.
             </p>
           </div>
         </div>
@@ -1032,30 +1280,32 @@ export default function AdminApp() {
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {section === 'dashboard' && <DashboardView />}
-          {section === 'users' && <UsersView />}
+          {section === 'users' && <PassengersView />}
           {section === 'drivers' && <DriversView onAddDriver={() => setIsDriverModalOpen(true)} />}
-          {section === 'stations' && <StationsView onAddStation={() => setIsStationModalOpen(true)} />}
-          {section === 'towns' && <TownsView onAddTown={() => setIsTownModalOpen(true)} />}
-          {section === 'fare-matrix' && <FareMatrixView onAddFareRule={() => setIsFareRuleModalOpen(true)} />}
+          {/* Nav "Terminals" → shows Terminal data */}
+          {section === 'terminals' && <TerminalsView
+            onAddTerminal={() => { setEditingTerminal(null); setIsTerminalModalOpen(true) }}
+            terminals={terminals}
+            onEdit={(t) => { setEditingTerminal(t); setIsTerminalModalOpen(true) }}
+            onDelete={handleDeleteTerminal}
+          />}
+          {section === 'fare-matrix' && <FareMatrixView
+            onAddFareRule={() => { setEditingFareRule(null); setIsFareRuleModalOpen(true) }}
+            onEditFareRule={(f) => { setEditingFareRule(f); setIsFareRuleModalOpen(true) }}
+            onDeleteFareRule={handleDeleteFareRule}
+          />}
           {section === 'transactions' && <TransactionsView />}
           {section === 'reports' && <ReportsView />}
           {section === 'settings' && <SettingsView />}
-          {section === 'trips' && <TripsView onAddTrip={() => {}} />}
-          {section === 'discount-types' && <DiscountTypesView onAddDiscountType={() => {}} />}
+          {section === 'trips' && <TripsView />}
+          {section === 'discount-types' && <DiscountTypesView onAddDiscountType={() => setIsDiscountTypeModalOpen(true)} />}
           {section === 'discount-applications' && <DiscountApplicationsView />}
+          {section === 'passenger-discounts' && <PassengerDiscountsView />}
           {section === 'trip-monitoring' && <TripMonitoringView />}
         </main>
       </div>
 
       {/* Modals */}
-      <StationModal
-        isOpen={isStationModalOpen}
-        onClose={() => setIsStationModalOpen(false)}
-        onSubmit={handleAddStation}
-        towns={towns}
-        loading={stationLoading}
-      />
-
       <DriverModal
         isOpen={isDriverModalOpen}
         onClose={() => setIsDriverModalOpen(false)}
@@ -1063,38 +1313,40 @@ export default function AdminApp() {
         loading={driverLoading}
       />
 
-      <TownModal
-        isOpen={isTownModalOpen}
-        onClose={() => setIsTownModalOpen(false)}
-        onSubmit={handleAddTown}
-        loading={townLoading}
+      <TerminalModal
+        isOpen={isTerminalModalOpen}
+        onClose={() => { setIsTerminalModalOpen(false); setEditingTerminal(null) }}
+        onSubmit={editingTerminal ? handleEditTerminal : handleAddTerminal}
+        terminals={terminals}
+        loading={terminalLoading}
+        initialData={editingTerminal ? { terminalId: editingTerminal.terminalId, terminalName: editingTerminal.terminalName } : undefined}
       />
 
       <FareRuleModal
         isOpen={isFareRuleModalOpen}
-        onClose={() => setIsFareRuleModalOpen(false)}
-        onSubmit={handleAddFareRule}
-        stations={stations}
+        onClose={() => { setIsFareRuleModalOpen(false); setEditingFareRule(null) }}
+        onSubmit={editingFareRule ? handleEditFareRule : handleAddFareRule}
+        terminals={terminals}
         loading={fareRuleLoading}
-      />
-
-      <TripModal
-        isOpen={isTripModalOpen}
-        onClose={() => setIsTripModalOpen(false)}
-        onSubmit={async (data) => {
-          // TODO: Implement trip creation via API
-          alert('Trip creation would be implemented here')
-          setIsTripModalOpen(false)
-        }}
+        initialData={editingFareRule ? {
+          originTerminalId: 0,
+          destinationTerminalId: 0,
+          fareAmount: editingFareRule.fareAmount,
+          effectiveDate: editingFareRule.effectiveDate,
+        } : undefined}
       />
 
       <DiscountTypeModal
         isOpen={isDiscountTypeModalOpen}
         onClose={() => setIsDiscountTypeModalOpen(false)}
         onSubmit={async (data) => {
-          // TODO: Implement discount type creation via API
-          alert('Discount type would be created here')
-          setIsDiscountTypeModalOpen(false)
+          try {
+            await adminService.createDiscountType(data)
+            success('Discount type created successfully!')
+            setIsDiscountTypeModalOpen(false)
+          } catch (err) {
+            showError(err instanceof Error ? err.message : 'Failed to create discount type')
+          }
         }}
       />
 

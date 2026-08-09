@@ -2,6 +2,7 @@ import { api } from './api';
 
 export interface User {
   userId: number;
+  username: string;
   firstName: string;
   lastName: string;
   mobileNumber: string;
@@ -16,7 +17,7 @@ export interface LoginResponse {
 }
 
 export interface LoginRequest {
-  mobileNumber: string;
+  username: string;
   password: string;
 }
 
@@ -38,6 +39,35 @@ export const authService = {
     return response.data;
   },
 
+  async validateToken(): Promise<boolean> {
+    const token = this.getToken();
+    if (!token) {
+      return false;
+    }
+    try {
+      const response = await api.get<{ success: boolean; data: User }>(
+        '/api/auth/validate',
+        token
+      );
+      if (response.success && response.data) {
+        // Update stored user info with fresh data from server
+        localStorage.setItem(USER_KEY, JSON.stringify(response.data));
+        return true;
+      }
+      return false;
+    } catch {
+      // Token is invalid or expired — clear all auth state
+      this.clearAuth();
+      return false;
+    }
+  },
+
+  clearAuth(): void {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  },
+
   async refreshToken(userId: number, refreshToken: string): Promise<LoginResponse> {
     const response = await api.post<{ success: boolean; data: LoginResponse }>(
       '/api/auth/refresh',
@@ -50,7 +80,16 @@ export const authService = {
     return response.data;
   },
 
-  logout() {
+  async logout(): Promise<void> {
+    const userId = this.getUser()?.userId;
+    const token = this.getToken();
+    if (userId && token) {
+      try {
+        await api.post('/api/auth/logout', {}, token);
+      } catch {
+        // Server-side token revocation is best-effort; clear local state regardless.
+      }
+    }
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);

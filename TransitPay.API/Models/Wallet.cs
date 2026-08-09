@@ -30,5 +30,9 @@ public class Wallet
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 
+    [Timestamp]
+    [Column("row_version")]
+    public byte[] RowVersion { get; set; } = [];
+
     public Card? Card { get; set; }
 }
