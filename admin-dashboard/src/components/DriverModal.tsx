@@ -75,6 +75,9 @@ export function DriverModal({ isOpen, onClose, onSubmit, loading = false }: Driv
     if (!validate()) return
 
     try {
+      // The backend CreateDriverRequest only accepts firstName, lastName,
+      // and mobileNumber. vehicle/plateNumber are UI-only fields that are
+      // not sent to the API. The default password is the Driver ID.
       await onSubmit({ firstName, lastName, mobileNumber, vehicle, plateNumber })
       onClose()
     } catch (error) {
@@ -158,6 +161,15 @@ export function DriverModal({ isOpen, onClose, onSubmit, loading = false }: Driv
             />
             {errors.plateNumber && <p className="text-red-500 text-xs mt-1">{errors.plateNumber}</p>}
           </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+          <p className="text-sm font-semibold text-blue-800">Default Password</p>
+          <p className="text-xs text-slate-600 mt-1">
+            The new driver's default password will be their Driver ID
+            (e.g., <span className="font-mono font-semibold text-blue-700">DRV-000010</span>).
+            They can change it later.
+          </p>
         </div>
 
         <div className="flex gap-3 pt-4">

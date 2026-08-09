@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5132';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 async function request<T>(
   endpoint: string,
@@ -35,6 +35,12 @@ export const api = {
   post: <T>(endpoint: string, data: unknown, token?: string) =>
     request<T>(endpoint, {
       method: 'POST',
+      body: JSON.stringify(data),
+    }, token),
+
+  put: <T>(endpoint: string, data: unknown, token?: string) =>
+    request<T>(endpoint, {
+      method: 'PUT',
       body: JSON.stringify(data),
     }, token),
 };

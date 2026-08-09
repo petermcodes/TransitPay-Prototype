@@ -11,13 +11,13 @@ public class FareRule
     [Column("fare_id")]
     public int FareId { get; set; }
 
-    [ForeignKey(nameof(OriginStation))]
-    [Column("origin_station_id")]
-    public int OriginStationId { get; set; }
+    [ForeignKey(nameof(OriginTerminal))]
+    [Column("origin_terminal_id")]
+    public int OriginTerminalId { get; set; }
 
-    [ForeignKey(nameof(DestinationStation))]
-    [Column("destination_station_id")]
-    public int DestinationStationId { get; set; }
+    [ForeignKey(nameof(DestinationTerminal))]
+    [Column("destination_terminal_id")]
+    public int DestinationTerminalId { get; set; }
 
     [Column("vehicle_type")]
     public VehicleType VehicleType { get; set; }
@@ -43,6 +43,6 @@ public class FareRule
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 
-    public Station? OriginStation { get; set; }
-    public Station? DestinationStation { get; set; }
+    public Terminal? OriginTerminal { get; set; }
+    public Terminal? DestinationTerminal { get; set; }
 }

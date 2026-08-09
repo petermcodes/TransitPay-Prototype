@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Html5Qrcode } from 'html5-qrcode'
 import {
   ArrowLeft, Eye, EyeOff, RefreshCw, CheckCircle,
   Bus, QrCode, Clock, TrendingUp, User, AlertCircle,
-  Play, Square, ChevronRight, Shield, Phone, Lock,
-  Wifi, Battery, Signal, MapPin, CreditCard
+  Play, Square, ChevronRight, Shield, Phone, Lock
 } from 'lucide-react'
 import { authService } from './lib/auth'
-import { cardService, type ScanReceipt } from './lib/cards'
-import { tripService, type Station, type Trip } from './lib/tripService'
+import { cardService, type ScanReceipt, type DriverTransaction } from './lib/cards'
+import { tripService, type Terminal, type Trip } from './lib/tripService'
 
-type DScreen = 'login' | 'home' | 'start-trip' | 'select-destination' | 'scanner' | 'scan-result' | 'pay-success' | 'trip-history'
+type DScreen = 'login' | 'home' | 'scanner' | 'scan-result' | 'pay-success' | 'trip-history'
 
 function Btn({ children, variant = 'primary', className = '', onClick, disabled, size = 'md' }: {
   children: React.ReactNode; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -36,24 +36,47 @@ function StatusChip({ status }: { status: string }) {
     completed: 'bg-green-50 text-green-700',
     pending: 'bg-yellow-50 text-yellow-700',
     failed: 'bg-red-50 text-red-700',
+    active: 'bg-green-50 text-green-700',
+    cancelled: 'bg-red-50 text-red-700',
   }
-  return <span className={`chip ${map[status] || map.completed}`}>{status}</span>
+  return <span className={`chip ${map[status.toLowerCase()] || map.completed}`}>{status}</span>
+}
+
+function formatTripTime(iso?: string): string {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 
-function DriverLogin({ go }: { go: (s: DScreen) => void }) {
+function DriverLogin({ go, onTripStatusChecked }: { go: (s: DScreen) => void; onTripStatusChecked?: (hasActiveTrip: boolean) => void }) {
   const [id, setId] = useState('')
   const [pass, setPass] = useState('')
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Load last logged-in driver ID on mount
+  useEffect(() => {
+    const lastDriverId = localStorage.getItem('lastDriverId')
+    if (lastDriverId) {
+      setId(lastDriverId)
+    }
+  }, [])
+
   const submit = async () => {
     setLoading(true)
     setError('')
     try {
-      await authService.login({ mobileNumber: id, password: pass })
+      await authService.login({ username: id, password: pass })
+      // Save driver ID for next login
+      localStorage.setItem('lastDriverId', id)
+      // Check for active trip after login to restore workflow
+      const activeTrip = await tripService.getActiveTrip()
+      const hasActiveTrip = activeTrip && activeTrip.tripStatus === 'Active'
+      // Notify parent about trip status
+      onTripStatusChecked?.(hasActiveTrip ?? false)
+      // Always go to home - no auto-redirect to scanner
       go('home')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -78,7 +101,7 @@ function DriverLogin({ go }: { go: (s: DScreen) => void }) {
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Driver ID</label>
           <div className="relative">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"><User size={16} /></span>
-            <input value={id} onChange={e => setId(e.target.value)} placeholder="DRV-XXXX"
+            <input value={id} onChange={e => setId(e.target.value)} placeholder="DRV-000010"
               className="tp-input w-full rounded-2xl border border-slate-200 bg-white px-4 pl-10 py-3.5 text-sm text-slate-800 placeholder:text-slate-400 transition-all" />
           </div>
         </div>
@@ -105,7 +128,7 @@ function DriverLogin({ go }: { go: (s: DScreen) => void }) {
         <div className="bg-blue-50 rounded-2xl p-3.5 flex items-start gap-2.5">
           <Shield size={15} className="text-blue-600 shrink-0 mt-0.5" />
           <p className="text-xs text-slate-600 leading-relaxed">
-            Your account must be approved by an administrator before you can log in. Contact your fleet manager for assistance.
+            Your account is ready to use. You can log in immediately with your credentials.
           </p>
         </div>
       </div>
@@ -115,62 +138,144 @@ function DriverLogin({ go }: { go: (s: DScreen) => void }) {
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 
-function DriverHome({ go }: { go: (s: DScreen) => void }) {
-  const [tripActive, setTripActive] = useState(false)
-  const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
+function DriverHome({ go, activeTrip, onTripChanged, tripActive, setTripActive, selectedOrigin, setSelectedOrigin }: {
+  go: (s: DScreen) => void; activeTrip: Trip | null; onTripChanged: (trip: Trip | null) => void
+  tripActive: boolean; setTripActive: (active: boolean) => void
+  selectedOrigin: Terminal | null; setSelectedOrigin: (s: Terminal | null) => void
+}) {
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [stats, setStats] = useState({ earnings: 0, trips: 0 })
-  const [recentTrips, setRecentTrips] = useState<any[]>([])
+  const [terminals, setTerminals] = useState<Terminal[]>([])
+  const [starting, setStarting] = useState(false)
+  const [ending, setEnding] = useState(false)
+  const [recentPassengers, setRecentPassengers] = useState<DriverTransaction[]>([])
+  const [loadingPassengers, setLoadingPassengers] = useState(false)
+  const user = authService.getUser()
 
   useEffect(() => {
-    loadActiveTrip()
+    loadTerminals()
+    loadStats()
+    loadRecentPassengers()
   }, [])
 
-  const loadActiveTrip = async () => {
+  const loadTerminals = async () => {
     try {
-      const trip = await tripService.resumeActiveTrip()
-      if (trip && trip.tripStatus === 'Active') {
-        setActiveTrip(trip)
-        setTripActive(true)
-      }
-    } catch (error) {
-      console.error('Failed to load active trip:', error)
+      const data = await tripService.getTerminals()
+      setTerminals(data)
+    } catch (err) {
+      console.error('Failed to load terminals:', err)
+    }
+  }
+
+  const loadStats = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      // Derive today's stats from trip history
+      const history = await tripService.getTripHistory(1, 100)
+      const today = new Date()
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      const todayTrips = history.data.filter(t => {
+        const started = t.startedAt ? new Date(t.startedAt) : null
+        return started && started >= todayStart && t.tripStatus === 'Completed'
+      })
+      const earnings = todayTrips.reduce((sum, t) => sum + t.totalRevenue, 0)
+      setStats({ earnings, trips: todayTrips.length })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load trip data')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleStartTrip = async () => {
+  const loadRecentPassengers = async () => {
+    setLoadingPassengers(true)
     try {
-      // Show station selection (in real app, fetch stations from backend)
-      const originStationId = prompt('Enter origin station ID:')
-      if (!originStationId) return
-
-      const response = await tripService.startTrip(parseInt(originStationId))
-      if (response.success && response.data) {
-        setActiveTrip(response.data)
-        setTripActive(true)
-        go('select-destination')
+      const result = await cardService.getDriverTransactions(1, 10)
+      if (result.success) {
+        setRecentPassengers(result.data)
       }
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to start trip')
+    } catch (err) {
+      console.error('Failed to load recent passengers:', err)
+    } finally {
+      setLoadingPassengers(false)
+    }
+  }
+
+  const handleStartTrip = async () => {
+    // Pre-flight check: verify no active trip exists before starting
+    try {
+      const existingTrip = await tripService.getActiveTrip()
+      if (existingTrip && existingTrip.tripStatus === 'Active') {
+        setError('You already have an active trip. Please end it first.')
+        onTripChanged(existingTrip)
+        return
+      }
+      
+      setStarting(true)
+      setError('')
+      try {
+        // Start the trip immediately without origin/destination
+        const response = await tripService.startTrip()
+        if (response.success && response.data) {
+          onTripChanged(response.data)
+          setTripActive(true)
+          // Stay on home screen - button will change to "End Trip"
+        } else {
+          setError(response.message || 'Failed to start trip')
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to start trip'
+        // If the error indicates an active trip already exists, fetch and resume it
+        if (errorMessage.includes('already have an active trip')) {
+          try {
+            const activeTrip = await tripService.getActiveTrip()
+            if (activeTrip && activeTrip.tripStatus === 'Active') {
+              onTripChanged(activeTrip)
+              setTripActive(true)
+              return
+            }
+          } catch (resumeErr) {
+            console.error('Failed to resume active trip:', resumeErr)
+          }
+        }
+        setError(errorMessage)
+      } finally {
+        setStarting(false)
+      }
+    } catch (err) {
+      setError('Failed to verify trip status. Please try again.')
     }
   }
 
   const handleEndTrip = async () => {
     if (!activeTrip) return
-    if (!confirm('Are you sure you want to end this trip?')) return
-
+    setEnding(true)
+    setError('')
     try {
       const response = await tripService.endTrip(activeTrip.tripId)
       if (response.success) {
-        setActiveTrip(null)
+        onTripChanged(null)
         setTripActive(false)
-        tripService.clearActiveTrip()
+        setSelectedOrigin(null)
+        loadStats()
+      } else {
+        setError(response.message || 'Failed to end trip')
       }
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to end trip')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to end trip')
+    } finally {
+      setEnding(false)
     }
+  }
+
+  const handleScanQR = () => {
+    if (!tripActive) {
+      alert('Please start a trip first')
+      return
+    }
+    go('scanner')
   }
 
   if (loading) {
@@ -181,6 +286,8 @@ function DriverHome({ go }: { go: (s: DScreen) => void }) {
     )
   }
 
+  const displayName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Driver'
+
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF] overflow-y-auto mobile-scroll">
       {/* Header */}
@@ -189,7 +296,7 @@ function DriverHome({ go }: { go: (s: DScreen) => void }) {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-blue-100 text-sm">Welcome back,</p>
-            <h2 className="font-poppins text-2xl font-bold text-white mt-0.5">Driver</h2>
+            <h2 className="font-poppins text-2xl font-bold text-white mt-0.5">{displayName}</h2>
             <div className="flex items-center gap-2 mt-1">
               <div className={`w-2 h-2 rounded-full ${tripActive ? 'bg-green-400 animate-pulse' : 'bg-slate-400'}`} />
               <span className="text-blue-100 text-xs">{tripActive ? 'On Duty' : 'Off Duty'}</span>
@@ -201,6 +308,13 @@ function DriverHome({ go }: { go: (s: DScreen) => void }) {
         </div>
       </div>
 
+      {error && (
+        <div className="mx-4 mt-3 bg-red-50 border border-red-200 rounded-2xl p-3 flex items-start gap-2">
+          <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-600">{error}</p>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="mx-4 -mt-14 grid grid-cols-2 gap-3 relative z-10">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -208,14 +322,14 @@ function DriverHome({ go }: { go: (s: DScreen) => void }) {
             <TrendingUp size={14} className="text-green-500" />
             <p className="text-xs text-slate-500 font-medium">Today's Earnings</p>
           </div>
-          <p className="font-poppins text-2xl font-bold text-slate-800">₱{stats.earnings.toFixed(2)}</p>
+          <p className="font-poppins text-2xl font-bold text-slate-800">₱{(stats.earnings || 0).toFixed(2)}</p>
         </div>
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center gap-1.5 mb-1">
             <Bus size={14} className="text-blue-500" />
             <p className="text-xs text-slate-500 font-medium">Trips Today</p>
           </div>
-          <p className="font-poppins text-2xl font-bold text-slate-800">{stats.trips}</p>
+          <p className="font-poppins text-2xl font-bold text-slate-800">{stats.trips || 0}</p>
         </div>
       </div>
 
@@ -227,15 +341,15 @@ function DriverHome({ go }: { go: (s: DScreen) => void }) {
             <p className="text-sm font-semibold text-green-700">Active Trip</p>
           </div>
           <p className="text-xs text-slate-600">
-            From: {activeTrip.originStation?.stationName || `Station ${activeTrip.originStationId}`}
+            From: {activeTrip.originTerminalName || activeTrip.originTerminal?.terminalName || `Terminal ${activeTrip.originTerminalId}`}
           </p>
-          {activeTrip.finalDestinationStation && (
+          {activeTrip.finalDestinationTerminalName && (
             <p className="text-xs text-slate-600">
-              To: {activeTrip.finalDestinationStation.stationName}
+              To: {activeTrip.finalDestinationTerminalName}
             </p>
           )}
           <p className="text-xs text-slate-500 mt-1">
-            Passengers: {activeTrip.passengerCount} · Revenue: ₱{activeTrip.totalRevenue.toFixed(2)}
+            Passengers: {activeTrip.passengerCount} · Revenue: ₱{(activeTrip.totalRevenue || 0).toFixed(2)}
           </p>
         </div>
       )}
@@ -243,26 +357,28 @@ function DriverHome({ go }: { go: (s: DScreen) => void }) {
       {/* Action buttons */}
       <div className="mx-4 mt-3 grid grid-cols-2 gap-3">
         {!tripActive ? (
-          <button onClick={handleStartTrip}
-            className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-green-50 text-green-700 border border-green-100 font-poppins font-semibold text-sm shadow-sm">
-            <Play size={24} />
-            Start Trip
+          <button onClick={handleStartTrip} disabled={starting}
+            className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-green-50 text-green-700 border border-green-100 font-poppins font-semibold text-sm shadow-sm disabled:opacity-50">
+            {starting ? <RefreshCw size={24} className="animate-spin" /> : <Play size={24} />}
+            {starting ? 'Starting...' : 'Start Trip'}
           </button>
         ) : (
-          <button onClick={handleEndTrip}
-            className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-red-50 text-red-600 border border-red-100 font-poppins font-semibold text-sm shadow-sm">
-            <Square size={24} />
-            End Trip
+          <button onClick={handleEndTrip} disabled={ending}
+            className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-red-50 text-red-600 border border-red-100 font-poppins font-semibold text-sm shadow-sm disabled:opacity-50">
+            {ending ? <RefreshCw size={24} className="animate-spin" /> : <Square size={24} />}
+            {ending ? 'Ending...' : 'End Trip'}
           </button>
         )}
-        <button onClick={() => tripActive ? go('select-destination') : alert('Please start a trip first')}
+        <button onClick={handleScanQR}
           className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-blue-gradient text-white font-poppins font-semibold text-sm shadow-md">
           <QrCode size={24} />
           Scan QR
         </button>
       </div>
 
-      {/* Recent */}
+      {/* Origin & Destination selectors removed - handled in passenger app */}
+
+      {/* Recent Passengers */}
       <div className="mx-4 mt-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <p className="font-poppins font-semibold text-sm text-slate-800">Recent Passengers</p>
@@ -270,225 +386,129 @@ function DriverHome({ go }: { go: (s: DScreen) => void }) {
             See all <ChevronRight size={12} />
           </button>
         </div>
-        {recentTrips.length === 0 ? (
+        {loadingPassengers ? (
           <div className="bg-white rounded-2xl p-6 text-center">
-            <p className="text-sm text-slate-400">No recent trips</p>
+            <RefreshCw size={24} className="text-blue-400 animate-spin mx-auto" />
+          </div>
+        ) : recentPassengers.length === 0 ? (
+          <div className="bg-white rounded-2xl p-6 text-center">
+            <User size={32} className="text-slate-300 mx-auto mb-2" />
+            <p className="text-sm text-slate-400">No recent passengers</p>
+            <p className="text-xs text-slate-400 mt-1">Passenger details will appear here after scanning</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {recentTrips.map((t: any) => (
-              <div key={t.id} className="bg-white rounded-2xl p-3.5 flex items-center gap-3 shadow-sm">
+          <div className="bg-white rounded-2xl overflow-hidden">
+            {recentPassengers.slice(0, 5).map((transaction, index) => (
+              <div key={transaction.transactionId} className={`p-3.5 flex items-center gap-3 ${index > 0 ? 'border-t border-slate-100' : ''}`}>
                 <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
                   <User size={18} className="text-blue-600" />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-800">{t.passengerName}</p>
-                  <p className="text-xs text-slate-400 font-mono">{t.time}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{transaction.passengerName}</p>
+                  <p className="text-xs text-slate-400 font-mono">{transaction.maskedCardNumber || `Card: ${transaction.cardId}`}</p>
+                  <p className="text-[10px] text-slate-400">
+                    {transaction.originTerminalName || `Terminal ${transaction.originTerminalId}`} → {transaction.destinationTerminalName || `Terminal ${transaction.terminalId}`}
+                  </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-slate-800">₱{t.fare.toFixed(2)}</p>
-                  <StatusChip status={t.status} />
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-slate-800">₱{transaction.finalFare.toFixed(2)}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">{formatTripTime(transaction.createdAt)}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-    </div>
-  )
-}
 
-// ── START TRIP ────────────────────────────────────────────────────────────────
-
-function StartTripScreen({ go }: { go: (s: DScreen) => void }) {
-  const [stations, setStations] = useState<Station[]>([])
-  const [selectedStation, setSelectedStation] = useState<Station | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    loadStations()
-  }, [])
-
-  const loadStations = async () => {
-    // In real app, fetch from backend
-    // For now, use mock data
-    setStations([
-      { stationId: 1, stationName: 'Central Station', townId: 1, isActive: true },
-      { stationId: 2, stationName: 'Airport Station', townId: 1, isActive: true },
-      { stationId: 3, stationName: 'Cubao Station', townId: 1, isActive: true },
-    ])
-  }
-
-  const handleStartTrip = async () => {
-    if (!selectedStation) return
-    setLoading(true)
-    try {
-      const response = await tripService.startTrip(selectedStation.stationId)
-      if (response.success) {
-        go('select-destination')
-      }
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to start trip')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="flex-1 flex flex-col bg-[#F0F4FF]">
-      <div className="bg-blue-gradient px-5 pt-10 pb-14">
-        <button onClick={() => go('home')} className="text-white/80 mb-4 flex items-center gap-1">
-          <ArrowLeft size={18} /> Back
-        </button>
-        <h2 className="font-poppins text-xl font-bold text-white">Start Trip</h2>
-        <p className="text-blue-100 text-sm mt-0.5">Select your origin station</p>
-      </div>
-      <div className="-mt-6 bg-white rounded-t-3xl flex-1 px-5 pt-6 pb-6 flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold text-slate-700">Origin Station</p>
-          {stations.map(station => (
-            <button
-              key={station.stationId}
-              onClick={() => setSelectedStation(station)}
-              className={`p-4 rounded-2xl border-2 text-left transition-all ${selectedStation?.stationId === station.stationId ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}
-            >
-              <div className="flex items-center gap-3">
-                <MapPin size={20} className="text-blue-600" />
-                <div>
-                  <p className="font-semibold text-slate-800">{station.stationName}</p>
-                  <p className="text-xs text-slate-500">Station #{station.stationId}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-        <Btn variant="primary" size="lg" onClick={handleStartTrip} disabled={!selectedStation || loading}>
-          {loading ? <><RefreshCw size={16} className="animate-spin" /> Starting...</> : 'Start Trip'}
-        </Btn>
-      </div>
-    </div>
-  )
-}
-
-// ── SELECT DESTINATION ────────────────────────────────────────────────────────
-
-function SelectDestinationScreen({ go }: { go: (s: DScreen) => void }) {
-  const [stations, setStations] = useState<Station[]>([])
-  const [selectedDestination, setSelectedDestination] = useState<Station | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    loadStations()
-  }, [])
-
-  const loadStations = async () => {
-    // In real app, fetch from backend
-    setStations([
-      { stationId: 1, stationName: 'Central Station', townId: 1, isActive: true },
-      { stationId: 2, stationName: 'Airport Station', townId: 1, isActive: true },
-      { stationId: 3, stationName: 'Cubao Station', townId: 1, isActive: true },
-    ])
-  }
-
-  const handleSelectDestination = () => {
-    if (!selectedDestination) return
-    // Store selected destination and go to scanner
-    go('scanner')
-  }
-
-  return (
-    <div className="flex-1 flex flex-col bg-[#F0F4FF]">
-      <div className="bg-blue-gradient px-5 pt-10 pb-14">
-        <button onClick={() => go('home')} className="text-white/80 mb-4 flex items-center gap-1">
-          <ArrowLeft size={18} /> Back
-        </button>
-        <h2 className="font-poppins text-xl font-bold text-white">Select Destination</h2>
-        <p className="text-blue-100 text-sm mt-0.5">Choose where the passenger is going</p>
-      </div>
-      <div className="-mt-6 bg-white rounded-t-3xl flex-1 px-5 pt-6 pb-6 flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold text-slate-700">Destination Station</p>
-          {stations.map(station => (
-            <button
-              key={station.stationId}
-              onClick={() => setSelectedDestination(station)}
-              className={`p-4 rounded-2xl border-2 text-left transition-all ${selectedDestination?.stationId === station.stationId ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'}`}
-            >
-              <div className="flex items-center gap-3">
-                <MapPin size={20} className="text-blue-600" />
-                <div>
-                  <p className="font-semibold text-slate-800">{station.stationName}</p>
-                  <p className="text-xs text-slate-500">Station #{station.stationId}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-        <Btn variant="primary" size="lg" onClick={handleSelectDestination} disabled={!selectedDestination}>
-          Continue to Scan
-        </Btn>
-      </div>
     </div>
   )
 }
 
 // ── QR SCANNER ────────────────────────────────────────────────────────────────
 
-function QRScanner({ go, destination }: { go: (s: DScreen) => void, destination: Station | null }) {
+function QRScanner({ go, activeTrip }: { go: (s: DScreen) => void, activeTrip: Trip | null }) {
   const [scanning, setScanning] = useState(true)
-  const [countdown, setCountdown] = useState(3)
-  const [scanMethod, setScanMethod] = useState<'qr' | 'card'>('qr')
-  const [cardNumber, setCardNumber] = useState('')
+  const [error, setError] = useState('')
+  const [scanError, setScanError] = useState<string>('')
+  const scannerRef = useRef<Html5Qrcode | null>(null)
 
-  useEffect(() => {
-    if (!scanning) return
-    const t = setTimeout(() => {
-      setScanning(false)
-      handleScan()
-    }, 3000)
-    const interval = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000)
-    return () => { clearTimeout(t); clearInterval(interval) }
-  }, [scanning, scanMethod, cardNumber, destination])
-
-  const handleScan = async () => {
-    if (!destination) {
-      alert('Please select a destination first')
-      go('select-destination')
-      return
-    }
-
+  const startScanner = async () => {
     try {
-      let receipt: ScanReceipt | null = null
+      const scanner = new Html5Qrcode('qr-reader')
+      scannerRef.current = scanner
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText) => {
+          // QR code detected - stop scanning and process payment
+          setScanning(false)
+          await scanner.stop()
+          await handleScannedQR(decodedText)
+        },
+        () => {
+          // No QR code detected - keep scanning
+        }
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start camera')
+      setScanning(false)
+    }
+  }
 
-      if (scanMethod === 'qr') {
-        // Simulate QR scan (in real app, get from scanner)
-        const qrData = btoa(JSON.stringify({ QRVersion: 1, CardId: 1, CardNumber: '4111111111111111', Token: 'test-token', CreatedAt: new Date().toISOString() }))
-        const signature = 'test-signature'
-        const result = await cardService.processConductorPayment(qrData, signature, destination.stationId)
-        if (result.success && result.data) {
-          receipt = result.data
-        }
-      } else {
-        // Physical card scan
-        if (!cardNumber) {
-          alert('Please enter card number')
-          return
-        }
-        const result = await cardService.scanPhysicalCard(cardNumber, destination.stationId)
-        if (result.success && result.data) {
-          receipt = result.data
+  // Start camera-based QR scanning when component mounts
+  useEffect(() => {
+    startScanner()
+
+    // Cleanup: stop scanner when component unmounts
+    return () => {
+      if (scannerRef.current) {
+        const state = scannerRef.current.getState()
+        // Only stop if the scanner is actually running (2 = SCANNING) or paused (3 = PAUSED)
+        if (state === 2 || state === 3) {
+          scannerRef.current.stop().catch(() => {})
         }
       }
+    }
+  }, [])
 
-      if (receipt) {
-        // Store receipt for the result screen
-        sessionStorage.setItem('lastReceipt', JSON.stringify(receipt))
+  const handleScannedQR = async (decodedText: string) => {
+    setScanError('') // Clear previous error
+    try {
+      // Parse the QR data - it should contain the payment session data
+      // The QR format is: base64Data.signature
+      // Use lastIndexOf to handle any edge cases where the data might contain dots
+      const trimmed = decodedText.trim()
+      const dotIndex = trimmed.lastIndexOf('.')
+      const qrData = dotIndex > 0 ? trimmed.substring(0, dotIndex) : ''
+      const qrSignature = dotIndex > 0 ? trimmed.substring(dotIndex + 1) : ''
+      
+      if (!qrData || !qrSignature) {
+        setScanError('Invalid QR code format. Please try scanning again.')
+        setScanning(true)
+        startScanner()
+        return
+      }
+
+      const result = await cardService.processConductorPayment(qrData, qrSignature)
+      if (result.success && result.data) {
+        sessionStorage.setItem('lastReceipt', JSON.stringify(result.data))
         go('scan-result')
+      } else {
+        // Show error but STAY on scanner
+        setScanError(result.message || 'Payment processing failed')
+        setScanning(true)
+        startScanner() // Restart scanning
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Scan failed')
-      go('home')
+      // Show error but STAY on scanner
+      setScanError(error instanceof Error ? error.message : 'Scan failed')
+      setScanning(true)
+      startScanner() // Restart scanning
     }
+  }
+
+  const dismissError = () => {
+    setScanError('')
   }
 
   return (
@@ -510,70 +530,35 @@ function QRScanner({ go, destination }: { go: (s: DScreen) => void, destination:
           </div>
         </div>
 
+        {/* Camera viewfinder */}
         <div className="relative w-64 h-64">
+          <div id="qr-reader" className="w-full h-full" />
           {[['top-0 left-0', 'rounded-tl-2xl'], ['top-0 right-0', 'rounded-tr-2xl'], ['bottom-0 left-0', 'rounded-bl-2xl'], ['bottom-0 right-0', 'rounded-br-2xl']].map(([pos, r]) => (
-            <div key={pos} className={`absolute ${pos} w-8 h-8 border-4 border-blue-400 ${r}`} />
+            <div key={pos} className={`absolute ${pos} w-8 h-8 border-4 border-blue-400 ${r} z-10`} />
           ))}
 
           {scanning && (
-            <div className="scan-line absolute left-2 right-2 h-0.5 bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />
+            <div className="scan-line absolute left-2 right-2 h-0.5 bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] z-10" />
           )}
-
-          <div className="absolute inset-4 flex items-center justify-center">
-            {scanning ? (
-              <div className="opacity-20">
-                <div className="grid grid-cols-8 gap-1">
-                  {Array.from({ length: 64 }).map((_, i) => (
-                    <div key={i} className={`w-4 h-4 rounded-sm ${Math.random() > 0.5 ? 'bg-white' : ''}`} />
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <CheckCircle size={64} className="text-green-400" />
-            )}
-          </div>
         </div>
 
-        {scanning && (
-          <div className="absolute bottom-24 left-0 right-0 flex justify-center">
-            <div className="bg-blue-600/80 backdrop-blur px-6 py-2 rounded-full flex items-center gap-2">
-              <RefreshCw size={14} className="text-white animate-spin" />
-              <p className="text-white text-sm font-mono">Auto-scanning... {countdown}s</p>
+        {error && (
+          <div className="absolute bottom-24 left-0 right-0 flex justify-center px-4">
+            <div className="bg-red-600/80 backdrop-blur px-6 py-2 rounded-full">
+              <p className="text-white text-sm">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {scanError && (
+          <div className="absolute bottom-24 left-0 right-0 flex justify-center px-4 z-30">
+            <div className="bg-red-600/90 backdrop-blur px-6 py-3 rounded-2xl shadow-lg max-w-sm" onClick={dismissError}>
+              <p className="text-white text-sm text-center font-semibold">{scanError}</p>
+              <p className="text-white/80 text-xs text-center mt-1">Tap to dismiss</p>
             </div>
           </div>
         )}
       </div>
-
-      {/* Scan method toggle */}
-      <div className="bg-slate-900 p-4 flex gap-2">
-        <button
-          onClick={() => setScanMethod('qr')}
-          className={`flex-1 py-3 rounded-xl font-semibold text-sm ${scanMethod === 'qr' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}
-        >
-          <QrCode size={18} className="inline mr-2" />
-          QR Code
-        </button>
-        <button
-          onClick={() => setScanMethod('card')}
-          className={`flex-1 py-3 rounded-xl font-semibold text-sm ${scanMethod === 'card' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'}`}
-        >
-          <CreditCard size={18} className="inline mr-2" />
-          Physical Card
-        </button>
-      </div>
-
-      {/* Physical card input */}
-      {scanMethod === 'card' && (
-        <div className="bg-slate-900 p-4">
-          <input
-            type="text"
-            value={cardNumber}
-            onChange={e => setCardNumber(e.target.value)}
-            placeholder="Enter card number"
-            className="w-full px-4 py-3 rounded-xl bg-slate-800 text-white placeholder:text-slate-400"
-          />
-        </div>
-      )}
     </div>
   )
 }
@@ -581,11 +566,9 @@ function QRScanner({ go, destination }: { go: (s: DScreen) => void, destination:
 // ── SCAN RESULT ───────────────────────────────────────────────────────────────
 
 function ScanResult({ go }: { go: (s: DScreen) => void }) {
-  // In real app, get receipt from context or state management
   const [receipt, setReceipt] = useState<ScanReceipt | null>(null)
 
   useEffect(() => {
-    // Retrieve receipt from session storage or context
     const receiptData = sessionStorage.getItem('lastReceipt')
     if (receiptData) {
       setReceipt(JSON.parse(receiptData))
@@ -638,11 +621,11 @@ function ScanResult({ go }: { go: (s: DScreen) => void }) {
         <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <span className="text-sm text-slate-500">Origin</span>
-            <span className="font-semibold text-slate-800">{receipt.originStationName || `Station ${receipt.originStationId}`}</span>
+            <span className="font-semibold text-slate-800">{receipt.originTerminalName || `Terminal ${receipt.originTerminalId}`}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-slate-500">Destination</span>
-            <span className="font-semibold text-slate-800">{receipt.destinationStationName || `Station ${receipt.destinationStationId}`}</span>
+            <span className="font-semibold text-slate-800">{receipt.destinationTerminalName || `Terminal ${receipt.destinationTerminalId}`}</span>
           </div>
         </div>
 
@@ -650,7 +633,7 @@ function ScanResult({ go }: { go: (s: DScreen) => void }) {
         <div className="bg-blue-600 rounded-2xl p-5 text-center">
           <p className="text-blue-200 text-xs uppercase tracking-wider font-semibold mb-1">Fare Charged</p>
           <p className="font-poppins text-4xl font-bold text-white">₱{receipt.lockedFare.toFixed(2)}</p>
-          <p className="text-blue-200 text-xs mt-1">{receipt.originStationName} → {receipt.destinationStationName}</p>
+          <p className="text-blue-200 text-xs mt-1">{receipt.originTerminalName} → {receipt.destinationTerminalName}</p>
         </div>
 
         {/* Receipt details */}
@@ -669,8 +652,7 @@ function ScanResult({ go }: { go: (s: DScreen) => void }) {
           <span className="text-xs font-mono text-slate-600">{new Date(receipt.paymentTimestamp).toLocaleString()}</span>
         </div>
 
-        <Btn variant="primary" size="lg" onClick={() => go('scanner')}>Scan Next Passenger</Btn>
-        <Btn variant="ghost" size="lg" onClick={() => go('home')}>Back to Dashboard</Btn>
+        <Btn variant="primary" size="lg" onClick={() => go('scanner')}>Close</Btn>
       </div>
     </div>
   )
@@ -691,16 +673,7 @@ function DriverPaySuccess({ go }: { go: (s: DScreen) => void }) {
         <h2 className="font-poppins text-2xl font-bold text-slate-800">Fare Collected!</h2>
         <p className="text-slate-500 text-sm mt-1">Payment processed successfully</p>
       </div>
-      <div className="bg-white rounded-3xl p-5 w-full shadow-sm flex flex-col gap-3">
-        {[['Passenger', 'Juan Dela Cruz'], ['Fare Collected', '₱23.00'], ['Route', 'Cubao → Ortigas'], ['Remaining Balance', '₱453.50'], ['Reference', 'TPDR-20260802-0034']].map(([k, v]) => (
-          <div key={k} className="flex justify-between items-center">
-            <span className="text-sm text-slate-500">{k}</span>
-            <span className={`text-sm font-semibold ${k === 'Fare Collected' ? 'text-green-600 font-bold text-base' : 'text-slate-800'}`}>{v}</span>
-          </div>
-        ))}
-      </div>
-      <Btn variant="primary" size="lg" onClick={() => go('scanner')}>Scan Next Passenger</Btn>
-      <Btn variant="ghost" size="lg" onClick={() => go('home')}>Back to Dashboard</Btn>
+      <Btn variant="primary" size="lg" onClick={() => go('scanner')}>Close</Btn>
     </div>
   )
 }
@@ -708,50 +681,237 @@ function DriverPaySuccess({ go }: { go: (s: DScreen) => void }) {
 // ── TRIP HISTORY ──────────────────────────────────────────────────────────────
 
 function TripHistory({ go }: { go: (s: DScreen) => void }) {
-  const trips = [
-    { id: 'T-034', pax: 'Juan Dela Cruz', fare: 23, route: 'Cubao → Ortigas', time: '10:14 AM', status: 'completed' },
-    { id: 'T-033', pax: 'Maria Santos', fare: 18, route: 'Marikina → Cubao', time: '09:52 AM', status: 'completed' },
-    { id: 'T-032', pax: 'Pedro Reyes', fare: 28, route: 'Lawton → Shaw', time: '09:30 AM', status: 'completed' },
-    { id: 'T-031', pax: 'Anna Cruz', fare: 13, route: 'Pioneer → Boni', time: '09:15 AM', status: 'completed' },
-    { id: 'T-030', pax: 'Carlo Tan', fare: 33, route: 'Sucat → Ortigas', time: '09:00 AM', status: 'completed' },
-    { id: 'T-029', pax: 'Liza Garcia', fare: 23, route: 'Quiapo → Cubao', time: '08:42 AM', status: 'completed' },
-  ]
+  const [trips, setTrips] = useState<Trip[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [timePeriod, setTimePeriod] = useState<'today' | 'week' | 'month' | 'year'>('today')
+  const [expandedTripId, setExpandedTripId] = useState<number | null>(null)
+  const [tripPassengers, setTripPassengers] = useState<DriverTransaction[]>([])
+  const [loadingPassengers, setLoadingPassengers] = useState(false)
+
+  useEffect(() => {
+    loadTrips()
+  }, [])
+
+  const loadTrips = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await tripService.getTripHistory(1, 100)
+      setTrips(result.data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load trip history')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadTripPassengers = async (trip: Trip) => {
+    setLoadingPassengers(true)
+    try {
+      const result = await cardService.getDriverTransactions(1, 100)
+      if (result.success) {
+        const started = new Date(trip.startedAt || trip.createdAt)
+        const ended = trip.endedAt ? new Date(trip.endedAt) : new Date()
+
+        const passengers = result.data.filter(tx => {
+          const txTime = new Date(tx.createdAt)
+          return txTime >= started && txTime <= ended
+        })
+
+        setTripPassengers(passengers)
+      }
+    } catch (err) {
+      console.error('Failed to load trip passengers:', err)
+    } finally {
+      setLoadingPassengers(false)
+    }
+  }
+
+  const handleTripClick = async (trip: Trip) => {
+    if (expandedTripId === trip.tripId) {
+      setExpandedTripId(null)
+      setTripPassengers([])
+    } else {
+      setExpandedTripId(trip.tripId)
+      await loadTripPassengers(trip)
+    }
+  }
+
+  const filterTripsByPeriod = (trips: Trip[], period: 'today' | 'week' | 'month' | 'year'): Trip[] => {
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+    return trips.filter(t => {
+      if (!t.startedAt) return false
+      const started = new Date(t.startedAt)
+
+      switch (period) {
+        case 'today':
+          return started >= todayStart
+        case 'week': {
+          const weekStart = new Date(todayStart)
+          weekStart.setDate(weekStart.getDate() - 7)
+          return started >= weekStart
+        }
+        case 'month': {
+          const monthStart = new Date(todayStart)
+          monthStart.setMonth(monthStart.getMonth() - 1)
+          return started >= monthStart
+        }
+        case 'year': {
+          const yearStart = new Date(todayStart)
+          yearStart.setFullYear(yearStart.getFullYear() - 1)
+          return started >= yearStart
+        }
+        default:
+          return false
+      }
+    })
+  }
+
+  const filteredTrips = filterTripsByPeriod(trips, timePeriod)
+  const totalTrips = filteredTrips.length
+  const totalEarnings = filteredTrips.reduce((sum, t) => sum + t.totalRevenue, 0)
+  const avgFare = totalTrips > 0 ? totalEarnings / totalTrips : 0
 
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF] overflow-y-auto mobile-scroll">
       <div className="bg-blue-gradient px-5 pt-10 pb-16">
-        <button onClick={() => go('home')} className="text-white/80 mb-4 flex items-center gap-1"><ArrowLeft size={18} /> Back</button>
+        <button onClick={() => go('home')} className="text-white/80 mb-4 flex items-center gap-1">
+          <ArrowLeft size={18} /> Back
+        </button>
         <h2 className="font-poppins text-xl font-bold text-white">Trip History</h2>
-        <p className="text-blue-100 text-sm mt-0.5">Today: 34 trips · ₱846.00</p>
       </div>
 
       <div className="-mt-6 bg-[#F0F4FF] rounded-t-3xl pt-4">
-        <div className="mx-4 grid grid-cols-3 gap-2 mb-4">
-          {[['Total Trips', '34'], ['Total Fare', '₱846'], ['Avg Fare', '₱24.9']].map(([k, v]) => (
-            <div key={k} className="bg-white rounded-2xl p-3 text-center shadow-sm">
-              <p className="font-poppins font-bold text-slate-800 text-lg">{v}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">{k}</p>
-            </div>
-          ))}
+        {/* Time Period Filter Tabs */}
+        <div className="mx-4 mb-3">
+          <div className="bg-white rounded-2xl p-1 shadow-sm flex">
+            {[
+              { period: 'today' as const, label: 'Today' },
+              { period: 'week' as const, label: 'This Week' },
+              { period: 'month' as const, label: 'This Month' },
+              { period: 'year' as const, label: 'This Year' },
+            ].map(({ period, label }) => (
+              <button
+                key={period}
+                onClick={() => setTimePeriod(period)}
+                className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold transition-all ${
+                  timePeriod === period
+                    ? 'bg-blue-gradient text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* Stats Cards */}
+        <div className="mx-4 grid grid-cols-3 gap-2 mb-4">
+          <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
+            <p className="font-poppins font-bold text-slate-800 text-lg">{totalTrips}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Total Trips</p>
+          </div>
+          <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
+            <p className="font-poppins font-bold text-slate-800 text-lg">₱{avgFare.toFixed(0)}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Average (Fare per Trip)</p>
+          </div>
+          <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
+            <p className="font-poppins font-bold text-slate-800 text-lg">₱{totalEarnings.toFixed(0)}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Total Earnings</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mx-4 mb-3 bg-red-50 border border-red-200 rounded-2xl p-3 flex items-start gap-2">
+            <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-600">{error}</p>
+          </div>
+        )}
+
+        {/* Trip List */}
         <div className="px-4 flex flex-col gap-2 pb-4">
-          {trips.map(t => (
-            <div key={t.id} className="bg-white rounded-2xl p-3.5 flex items-center gap-3 shadow-sm">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
-                <User size={18} className="text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800">{t.pax}</p>
-                <p className="text-xs text-slate-400">{t.route}</p>
-                <p className="text-[10px] text-slate-400 font-mono">{t.time}</p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm font-bold text-slate-800">₱{t.fare}.00</p>
-                <StatusChip status={t.status} />
-              </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw size={24} className="text-blue-400 animate-spin" />
             </div>
-          ))}
+          ) : filteredTrips.length === 0 ? (
+            <div className="bg-white rounded-2xl p-6 text-center">
+              <Clock size={32} className="text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">No trips found for this period</p>
+            </div>
+          ) : (
+            filteredTrips.map(t => {
+              const tripDate = t.startedAt
+                ? new Date(t.startedAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })
+                : new Date(t.createdAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })
+
+              const isExpanded = expandedTripId === t.tripId
+
+              return (
+                <div key={t.tripId} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div
+                    className="p-4 cursor-pointer hover:bg-blue-50 transition-colors"
+                    onClick={() => handleTripClick(t)}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">Trip #{t.tripId}</p>
+                        <p className="text-xs text-slate-500 mt-1">{tripDate}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-slate-800">₱{t.totalRevenue.toFixed(2)}</p>
+                        <StatusChip status={String(t.tripStatus)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-2 border-t border-slate-100">
+                      {loadingPassengers ? (
+                        <div className="flex justify-center py-4">
+                          <RefreshCw size={20} className="text-blue-400 animate-spin" />
+                        </div>
+                      ) : tripPassengers.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-2">No passengers found</p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {tripPassengers.map(passenger => (
+                            <div key={passenger.transactionId} className="flex justify-between items-start">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-800">{passenger.passengerName}</p>
+                                <p className="text-xs text-slate-500">
+                                  {passenger.originTerminalName || `Terminal ${passenger.originTerminalId}`} → {passenger.destinationTerminalName || '—'}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-bold text-slate-800">₱{passenger.finalFare.toFixed(2)}</p>
+                                <p className="text-[10px] text-slate-400">
+                                  {new Date(passenger.createdAt).toLocaleTimeString('en-US', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
         </div>
       </div>
     </div>
@@ -793,17 +953,90 @@ const showNav: DScreen[] = ['home', 'trip-history']
 
 export default function DriverApp() {
   const [screen, setScreen] = useState<DScreen>('login')
-  const [selectedDestination, setSelectedDestination] = useState<Station | null>(null)
-  const go = (s: DScreen) => setScreen(s)
+  const [selectedOrigin, setSelectedOrigin] = useState<Terminal | null>(null)
+  const [activeTrip, setActiveTrip] = useState<Trip | null>(null)
+  const [tripActive, setTripActive] = useState(false)
+  const [checkingTrip, setCheckingTrip] = useState(false)
+  
+  // Centralized function to check and sync active trip status
+  // Checks database: driver_id = logged-in driver AND trip_status = Active (1)
+  const checkActiveTrip = async () => {
+    setCheckingTrip(true)
+    try {
+      const trip = await tripService.getActiveTrip()
+      const isActive = trip && trip.tripStatus === 'Active'
+      if (isActive) {
+        setActiveTrip(trip)
+        setTripActive(true)
+        return true
+      } else {
+        setActiveTrip(null)
+        setTripActive(false)
+        return false
+      }
+    } catch (err) {
+      console.error('Failed to check active trip:', err)
+      setActiveTrip(null)
+      setTripActive(false)
+      return false
+    } finally {
+      setCheckingTrip(false)
+    }
+  }
+  
+  const go = async (s: DScreen) => {
+    // When navigating to home, wait for DB check before rendering
+    if (s === 'home') {
+      await checkActiveTrip()
+    }
+    
+    // Prevent navigating to scanner without an active trip
+    if (s === 'scanner' && !tripActive) {
+      alert('Please start a trip first')
+      return
+    }
+    
+    setScreen(s)
+  }
+
+  // Restore active trip on app load (workflow persistence)
+  useEffect(() => {
+    const restoreActiveTrip = async () => {
+      // Only restore if user is already authenticated (has token)
+      if (authService.isAuthenticated()) {
+        await checkActiveTrip()
+        // No auto-redirect - just sync trip state
+      }
+    }
+    restoreActiveTrip()
+  }, [])
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
-        {screen === 'login' && <DriverLogin go={go} />}
-        {screen === 'home' && <DriverHome go={go} />}
-        {screen === 'start-trip' && <StartTripScreen go={go} />}
-        {screen === 'select-destination' && <SelectDestinationScreen go={go} />}
-        {screen === 'scanner' && <QRScanner go={go} destination={selectedDestination} />}
+        {screen === 'login' && <DriverLogin 
+          go={go} 
+          onTripStatusChecked={(hasActiveTrip) => {
+            setTripActive(hasActiveTrip)
+          }}
+        />}
+        {screen === 'home' && (checkingTrip ? (
+          <div className="flex-1 flex items-center justify-center bg-[#F0F4FF]">
+            <RefreshCw size={32} className="text-blue-400 animate-spin" />
+          </div>
+        ) : (
+          <DriverHome
+            go={go}
+            activeTrip={activeTrip}
+            onTripChanged={setActiveTrip}
+            tripActive={tripActive}
+            setTripActive={setTripActive}
+            selectedOrigin={selectedOrigin}
+            setSelectedOrigin={setSelectedOrigin}
+          />
+        ))}
+        {/* Start-trip and select-destination screens removed - trip starts directly from home */}
+        {screen === 'scanner' && <QRScanner go={go} activeTrip={activeTrip} />}
         {screen === 'scan-result' && <ScanResult go={go} />}
         {screen === 'pay-success' && <DriverPaySuccess go={go} />}
         {screen === 'trip-history' && <TripHistory go={go} />}

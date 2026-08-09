@@ -3,7 +3,7 @@ using TransitPay.API.Models;
 namespace TransitPay.API.Interfaces;
 
 /// <summary>
-/// Service for managing discount types and discount applications.
+/// Service for managing discount types, discount programs, and discount applications.
 /// Handles the complete discount lifecycle from creation to application.
 /// </summary>
 public interface IDiscountService
@@ -17,8 +17,17 @@ public interface IDiscountService
     Task<IEnumerable<DiscountType>> GetAllDiscountTypesAsync();
     Task<DiscountType?> GetDiscountTypeByIdAsync(int discountTypeId);
 
+    // Discount Program Management (Admin)
+    Task<DiscountProgram> CreateDiscountProgramAsync(DiscountProgram discountProgram);
+    Task<DiscountProgram> UpdateDiscountProgramAsync(int discountProgramId, DiscountProgram discountProgram);
+    Task<bool> DeleteDiscountProgramAsync(int discountProgramId);
+    Task<bool> ActivateDiscountProgramAsync(int discountProgramId);
+    Task<bool> DeactivateDiscountProgramAsync(int discountProgramId);
+    Task<IEnumerable<DiscountProgram>> GetAllDiscountProgramsAsync();
+    Task<DiscountProgram?> GetDiscountProgramByIdAsync(int discountProgramId);
+
     // Discount Application Management (Passenger)
-    Task<DiscountApplication> ApplyForDiscountAsync(int cardId, int discountTypeId, string? discountDocument = null);
+    Task<DiscountApplication> ApplyForDiscountAsync(int cardId, int discountTypeId, int userId, string? discountDocument = null);
     Task<IEnumerable<DiscountApplication>> GetApplicationsByCardAsync(int cardId);
 
     // Discount Approval Workflow (Admin)
@@ -28,6 +37,6 @@ public interface IDiscountService
     Task<IEnumerable<DiscountApplication>> GetAllApplicationsAsync();
 
     // Discount Retrieval (Payment Service)
-    Task<DiscountApplication?> GetActiveDiscountForCardAsync(int cardId);
+    Task<PassengerDiscount?> GetActiveDiscountForCardAsync(int cardId);
     Task<decimal> CalculateDiscountedFareAsync(decimal regularFare, int? discountTypeId);
 }

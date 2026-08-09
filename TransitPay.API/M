@@ -1,0 +1,129 @@
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace TransitPay.API.Migrations;
+
+/// <inheritdoc />
+public partial class RenameTownToTerminal : Migration
+{
+    /// <inheritdoc />
+    protected override void Up(MigrationBuilder migrationBuilder)
+    {
+        // Rename towns table to terminals
+        migrationBuilder.RenameTable(
+            name: "towns",
+            newName: "terminals");
+
+        // Rename town_id column to terminal_id in terminals table
+        migrationBuilder.RenameColumn(
+            name: "town_id",
+            table: "terminals",
+            newName: "terminal_id");
+
+        // Rename town_name column to terminal_name in terminals table
+        migrationBuilder.RenameColumn(
+            name: "town_name",
+            table: "terminals",
+            newName: "terminal_name");
+
+        // Rename the sequence for terminals (PostgreSQL identity columns use sequences)
+        migrationBuilder.Sql("ALTER SEQUENCE IF EXISTS towns_town_id_seq RENAME TO terminals_terminal_id_seq;");
+        migrationBuilder.Sql("ALTER TABLE IF EXISTS terminals ALTER COLUMN terminal_id SET DEFAULT nextval('terminals_terminal_id_seq');");
+
+        // Rename indexes on terminals table
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_towns_town_name RENAME TO ix_terminals_terminal_name;");
+
+        // Rename town_id column to terminal_id in stations table
+        migrationBuilder.RenameColumn(
+            name: "town_id",
+            table: "stations",
+            newName: "terminal_id");
+
+        // Rename the foreign key constraint on stations table
+        migrationBuilder.Sql("ALTER TABLE stations DROP CONSTRAINT IF EXISTS fk_stations_towns_town_id;");
+        migrationBuilder.Sql("ALTER TABLE stations ADD CONSTRAINT fk_stations_terminals_terminal_id FOREIGN KEY (terminal_id) REFERENCES terminals(terminal_id) ON DELETE RESTRICT;");
+
+        // Rename the index on stations.town_id
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_stations_town_id RENAME TO ix_stations_terminal_id;");
+
+        // Rename town_edit_history table to terminal_edit_history
+        migrationBuilder.RenameTable(
+            name: "town_edit_history",
+            newName: "terminal_edit_history");
+
+        // Rename town_delete_history table to terminal_delete_history
+        migrationBuilder.RenameTable(
+            name: "town_delete_history",
+            newName: "terminal_delete_history");
+
+        // Rename indexes on history tables
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_town_edit_history_original_record_id RENAME TO ix_terminal_edit_history_original_record_id;");
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_town_edit_history_performed_at RENAME TO ix_terminal_edit_history_performed_at;");
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_town_edit_history_operation RENAME TO ix_terminal_edit_history_operation;");
+
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_town_delete_history_original_record_id RENAME TO ix_terminal_delete_history_original_record_id;");
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_town_delete_history_performed_at RENAME TO ix_terminal_delete_history_performed_at;");
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_town_delete_history_operation RENAME TO ix_terminal_delete_history_operation;");
+    }
+
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        // Revert terminals table back to towns
+        migrationBuilder.RenameTable(
+            name: "terminals",
+            newName: "towns");
+
+        // Revert terminal_id column to town_id
+        migrationBuilder.RenameColumn(
+            name: "terminal_id",
+            table: "towns",
+            newName: "town_id");
+
+        // Revert terminal_name column to town_name
+        migrationBuilder.RenameColumn(
+            name: "terminal_name",
+            table: "towns",
+            newName: "town_name");
+
+        // Revert the sequence
+        migrationBuilder.Sql("ALTER SEQUENCE IF EXISTS terminals_terminal_id_seq RENAME TO towns_town_id_seq;");
+        migrationBuilder.Sql("ALTER TABLE IF EXISTS towns ALTER COLUMN town_id SET DEFAULT nextval('towns_town_id_seq');");
+
+        // Revert indexes
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_terminals_terminal_name RENAME TO ix_towns_town_name;");
+
+        // Revert terminal_id column to town_id in stations table
+        migrationBuilder.RenameColumn(
+            name: "terminal_id",
+            table: "stations",
+            newName: "town_id");
+
+        // Revert the foreign key constraint
+        migrationBuilder.Sql("ALTER TABLE stations DROP CONSTRAINT IF EXISTS fk_stations_terminals_terminal_id;");
+        migrationBuilder.Sql("ALTER TABLE stations ADD CONSTRAINT fk_stations_towns_town_id FOREIGN KEY (town_id) REFERENCES towns(town_id) ON DELETE RESTRICT;");
+
+        // Revert the index on stations.town_id
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_stations_terminal_id RENAME TO ix_stations_town_id;");
+
+        // Revert terminal_edit_history table back to town_edit_history
+        migrationBuilder.RenameTable(
+            name: "terminal_edit_history",
+            newName: "town_edit_history");
+
+        // Revert terminal_delete_history table back to town_delete_history
+        migrationBuilder.RenameTable(
+            name: "terminal_delete_history",
+            newName: "town_delete_history");
+
+        // Revert indexes on history tables
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_terminal_edit_history_original_record_id RENAME TO ix_town_edit_history_original_record_id;");
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_terminal_edit_history_performed_at RENAME TO ix_town_edit_history_performed_at;");
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_terminal_edit_history_operation RENAME TO ix_town_edit_history_operation;");
+
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_terminal_delete_history_original_record_id RENAME TO ix_town_delete_history_original_record_id;");
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_terminal_delete_history_performed_at RENAME TO ix_town_delete_history_performed_at;");
+        migrationBuilder.Sql("ALTER INDEX IF EXISTS ix_terminal_delete_history_operation RENAME TO ix_town_delete_history_operation;");
+    }
+}

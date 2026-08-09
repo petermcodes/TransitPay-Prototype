@@ -1,8 +1,11 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TransitPay.API.Data;
+using TransitPay.API.Enums;
 using TransitPay.API.Interfaces;
 using TransitPay.API.Models;
+using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
@@ -12,11 +15,13 @@ namespace TransitPay.API.Controllers;
 public class TripController : ControllerBase
 {
     private readonly ITripService _tripService;
+    private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<TripController> _logger;
 
-    public TripController(ITripService tripService, ILogger<TripController> logger)
+    public TripController(ITripService tripService, TransitPayDbContext dbContext, ILogger<TripController> logger)
     {
         _tripService = tripService;
+        _dbContext = dbContext;
         _logger = logger;
     }
 
@@ -31,7 +36,7 @@ public class TripController : ControllerBase
             return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
         }
 
-        var driverId = GetUserIdFromClaims();
+        var driverId = User.GetAuthenticatedUserId();
         if (driverId == null)
         {
             return Unauthorized(new { success = false, message = "Driver not authenticated." });
@@ -41,8 +46,8 @@ public class TripController : ControllerBase
         {
             var trip = await _tripService.StartTripAsync(
                 driverId.Value,
-                request.OriginStationId,
-                request.FinalDestinationStationId);
+                request.OriginTerminalId,
+                request.FinalDestinationTerminalId);
 
             return Ok(new
             {
@@ -52,8 +57,9 @@ public class TripController : ControllerBase
                 {
                     trip.TripId,
                     trip.DriverId,
-                    trip.OriginStationId,
-                    trip.FinalDestinationStationId,
+                    trip.OriginTerminalId,
+                    trip.FinalDestinationTerminalId,
+                    trip.CurrentBoardingOriginTerminalId,
                     trip.RouteName,
                     trip.TripStatus,
                     trip.StartedAt,
@@ -79,6 +85,12 @@ public class TripController : ControllerBase
     [HttpPost("{tripId}/end")]
     public async Task<IActionResult> EndTrip(int tripId)
     {
+        // Ownership validation: the trip must belong to the authenticated driver (or Admin)
+        if (!await CanManageTripAsync(tripId))
+        {
+            return NotFound(new { success = false, message = "Trip not found." });
+        }
+
         try
         {
             var trip = await _tripService.EndTripAsync(tripId);
@@ -86,12 +98,12 @@ public class TripController : ControllerBase
             return Ok(new
             {
                 success = true,
-                message = "Trip ended successfully.",
+                message = "Current boarding origin updated successfully.",
                 data = new
                 {
                     trip.TripId,
-                    trip.TripStatus,
-                    trip.EndedAt,
+                    trip.CurrentBoardingOriginTerminalId,
+                    trip.BoardingOriginUpdatedAt,
                     trip.UpdatedAt
                 }
             });
@@ -114,7 +126,7 @@ public class TripController : ControllerBase
     [HttpGet("active")]
     public async Task<IActionResult> GetActiveTrip()
     {
-        var driverId = GetUserIdFromClaims();
+        var driverId = User.GetAuthenticatedUserId();
         if (driverId == null)
         {
             return Unauthorized(new { success = false, message = "Driver not authenticated." });
@@ -137,10 +149,13 @@ public class TripController : ControllerBase
                 {
                     trip.TripId,
                     trip.DriverId,
-                    trip.OriginStationId,
-                    OriginStationName = trip.OriginStation?.StationName,
-                    trip.FinalDestinationStationId,
-                    FinalDestinationStationName = trip.FinalDestinationStation?.StationName,
+                    trip.OriginTerminalId,
+                    OriginTerminalName = trip.OriginTerminal?.TerminalName,
+                    trip.FinalDestinationTerminalId,
+                    FinalDestinationTerminalName = trip.FinalDestinationTerminal?.TerminalName,
+                    trip.CurrentBoardingOriginTerminalId,
+                    CurrentBoardingOriginTerminalName = trip.CurrentBoardingOriginTerminal?.TerminalName,
+                    trip.BoardingOriginUpdatedAt,
                     trip.RouteName,
                     trip.TripStatus,
                     trip.StartedAt,
@@ -157,11 +172,64 @@ public class TripController : ControllerBase
     }
 
     /// <summary>
+    /// Updates the current boarding origin for an active trip.
+    /// The conductor changes this only when passengers begin boarding at a different station.
+    /// </summary>
+    [HttpPut("{tripId}/boarding-origin")]
+    public async Task<IActionResult> UpdateBoardingOrigin(int tripId, [FromBody] UpdateBoardingOriginRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+        }
+
+        // Ownership validation: the trip must belong to the authenticated driver (or Admin)
+        if (!await CanManageTripAsync(tripId))
+        {
+            return NotFound(new { success = false, message = "Trip not found." });
+        }
+
+        try
+        {
+            var trip = await _tripService.UpdateCurrentBoardingOriginAsync(tripId, request.OriginTerminalId);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Current boarding origin updated successfully.",
+                data = new
+                {
+                    trip.TripId,
+                    trip.CurrentBoardingOriginTerminalId,
+                    trip.BoardingOriginUpdatedAt,
+                    trip.UpdatedAt
+                }
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to update boarding origin for trip {TripId}: {Message}", tripId, ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating boarding origin for trip {TripId}", tripId);
+            return StatusCode(500, new { success = false, message = "An error occurred while updating the boarding origin." });
+        }
+    }
+
+    /// <summary>
     /// Cancels a trip.
     /// </summary>
     [HttpPost("{tripId}/cancel")]
     public async Task<IActionResult> CancelTrip(int tripId)
     {
+        // Ownership validation: the trip must belong to the authenticated driver (or Admin)
+        if (!await CanManageTripAsync(tripId))
+        {
+            return NotFound(new { success = false, message = "Trip not found." });
+        }
+
         try
         {
             var trip = await _tripService.CancelTripAsync(tripId);
@@ -197,7 +265,7 @@ public class TripController : ControllerBase
     [HttpGet("history")]
     public async Task<IActionResult> GetTripHistory([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var driverId = GetUserIdFromClaims();
+        var driverId = User.GetAuthenticatedUserId();
         if (driverId == null)
         {
             return Unauthorized(new { success = false, message = "Driver not authenticated." });
@@ -222,10 +290,10 @@ public class TripController : ControllerBase
                 {
                     t.TripId,
                     t.DriverId,
-                    t.OriginStationId,
-                    OriginStationName = t.OriginStation?.StationName,
-                    t.FinalDestinationStationId,
-                    FinalDestinationStationName = t.FinalDestinationStation?.StationName,
+                    t.OriginTerminalId,
+                    OriginTerminalName = t.OriginTerminal?.TerminalName,
+                    t.FinalDestinationTerminalId,
+                    FinalDestinationTerminalName = t.FinalDestinationTerminal?.TerminalName,
                     t.RouteName,
                     t.TripStatus,
                     t.StartedAt,
@@ -251,31 +319,50 @@ public class TripController : ControllerBase
     }
 
     /// <summary>
-    /// Extracts the authenticated user's ID from the JWT claims.
+    /// Determines whether the authenticated user can manage a specific trip.
+    /// Drivers may manage only their own trips. Admins may manage any trip.
     /// </summary>
-    private int? GetUserIdFromClaims()
+    private async Task<bool> CanManageTripAsync(int tripId)
     {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub")
-            ?? User.FindFirstValue("userId");
-
-        if (int.TryParse(userIdClaim, out var userId))
+        var userId = User.GetAuthenticatedUserId();
+        if (userId == null)
         {
-            return userId;
+            return false;
         }
 
-        return null;
+        var isAdmin = User.IsInRole(nameof(RoleName.Admin));
+
+        if (isAdmin)
+        {
+            return true;
+        }
+
+        var trip = await _dbContext.Trips
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TripId == tripId);
+
+        return trip != null && trip.DriverId == userId.Value;
     }
 }
 
 /// <summary>
 /// Request DTO for starting a trip.
+/// Origin and destination are optional — a trip can be started immediately
+/// and the driver can select them afterward for scanning.
 /// </summary>
 public class StartTripRequest
 {
-    [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Origin station ID is required.")]
-    public int OriginStationId { get; set; }
+    public int? OriginTerminalId { get; set; }
 
-    [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Final destination station ID is required.")]
-    public int FinalDestinationStationId { get; set; }
+    public int? FinalDestinationTerminalId { get; set; }
+}
+
+/// <summary>
+/// Request DTO for updating the current boarding origin of an active trip.
+/// </summary>
+public class UpdateBoardingOriginRequest
+{
+    [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Origin terminal ID is required.")]
+    [System.ComponentModel.DataAnnotations.Range(1, int.MaxValue, ErrorMessage = "Invalid origin terminal ID.")]
+    public int OriginTerminalId { get; set; }
 }

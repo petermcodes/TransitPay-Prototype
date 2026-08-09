@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5132';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 async function request<T>(
   endpoint: string,
@@ -47,6 +47,27 @@ export const api = {
   delete: <T>(endpoint: string, token?: string) =>
     request<T>(endpoint, { method: 'DELETE' }, token),
 };
+
+// Specialized blob fetcher for file downloads
+// The generic api.get<T> uses response.json() which fails on binary responses
+export async function getBlob(endpoint: string, token?: string): Promise<Blob> {
+  const url = `${API_BASE}${endpoint}`;
+  const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Network error' }));
+    throw new Error(error.message || `HTTP ${response.status}`);
+  }
+
+  return response.blob();
+}
 
 export type ApiResponse<T> = {
   success: boolean;

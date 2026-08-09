@@ -7,6 +7,7 @@ using TransitPay.API.DTOs.Payment;
 using TransitPay.API.Enums;
 using TransitPay.API.Interfaces;
 using TransitPay.API.Models;
+using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Services;
 
@@ -145,23 +146,23 @@ public class QRService : IQRService
     {
         _logger.LogInformation("Validating QR code");
 
-        // Decode the QR data
+        // Decode the QR data (Base64Url-encoded for QR code safety)
         string json;
         try
         {
-            json = Encoding.UTF8.GetString(Convert.FromBase64String(qrData));
+            json = Encoding.UTF8.GetString(FromBase64Url(qrData));
         }
         catch (FormatException)
         {
-            _logger.LogWarning("QR validation failed - invalid base64 format");
+            _logger.LogWarning("QR validation failed - invalid base64url format");
             throw new InvalidOperationException("Invalid QR code format.");
         }
 
         // Verify the signature
         var expectedSignature = ComputeSignature(json);
         if (!CryptographicOperations.FixedTimeEquals(
-            Convert.FromBase64String(signature),
-            Convert.FromBase64String(expectedSignature)))
+            FromBase64Url(signature),
+            FromBase64Url(expectedSignature)))
         {
             _logger.LogWarning("QR validation failed - signature mismatch");
             throw new InvalidOperationException("Invalid QR code signature.");
@@ -217,17 +218,18 @@ public class QRService : IQRService
     /// </summary>
     private QRTicketResponse CreateTicket(QRCode qrCode, Card card)
     {
+        // Build payload with only non-sensitive fields. DO NOT include the full card number.
+        // Keep the payload minimal (CardId + Token only) to reduce QR density for reliable scanning.
         var payload = new QRPayload
         {
-            QRVersion = 1,
             CardId = card.CardId,
-            CardNumber = card.CardNumber,
-            Token = qrCode.Token,
-            CreatedAt = qrCode.CreatedAt
+            // CardNumber intentionally omitted from payload to prevent PAN exposure.
+            // PlanId NOT included - QR is permanent, PlanId changes per trip
+            Token = qrCode.Token
         };
 
         var json = JsonSerializer.Serialize(payload);
-        var data = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+        var data = ToBase64Url(Encoding.UTF8.GetBytes(json));
         var signature = ComputeSignature(json);
 
         return new QRTicketResponse
@@ -235,7 +237,8 @@ public class QRService : IQRService
             Data = data,
             Signature = signature,
             CardId = card.CardId,
-            CardNumber = MaskCardNumber(card.CardNumber)
+            // Expose only masked card number to frontend for display.
+            MaskedCardNumber = CardFormatter.MaskCardNumber(card.CardNumber)
         };
     }
 
@@ -247,7 +250,7 @@ public class QRService : IQRService
     {
         var keyBytes = _securityKeyProvider.GetSigningKeyBytes();
         var signatureBytes = HMACSHA256.HashData(keyBytes, Encoding.UTF8.GetBytes(json));
-        return Convert.ToBase64String(signatureBytes);
+        return ToBase64Url(signatureBytes);
     }
 
     /// <summary>
@@ -264,16 +267,36 @@ public class QRService : IQRService
     }
 
     /// <summary>
-    /// Masks a card number for display (e.g., "4111111111111111" → "•••• 1111").
+    /// Converts a byte array to a Base64Url string (URL-safe, no padding).
+    /// Uses '-' and '_' instead of '+' and '/', and omits '=' padding.
+    /// This ensures the encoded string is safe for QR codes and URL transmission.
     /// </summary>
-    private static string MaskCardNumber(string cardNumber)
+    private static string ToBase64Url(byte[] bytes)
     {
-        if (string.IsNullOrWhiteSpace(cardNumber) || cardNumber.Length < 4)
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
+    /// <summary>
+    /// Converts a Base64Url string back to a byte array.
+    /// Restores padding and reverses the '-'/'_' substitutions.
+    /// </summary>
+    private static byte[] FromBase64Url(string base64Url)
+    {
+        var padded = base64Url
+            .Replace('-', '+')
+            .Replace('_', '/');
+
+        // Restore padding
+        switch (padded.Length % 4)
         {
-            return cardNumber;
+            case 2: padded += "=="; break;
+            case 3: padded += "="; break;
         }
 
-        return $"•••• {cardNumber[^4..]}";
+        return Convert.FromBase64String(padded);
     }
 }
 
@@ -281,21 +304,15 @@ public class QRService : IQRService
 /// Internal payload structure for QR codes.
 /// Contains only non-sensitive data — no passwords, no wallet balances.
 /// No fare, origin, or destination — those belong to the active payment session.
+/// Important: Do NOT include full card numbers in this payload.
 /// </summary>
 public class QRPayload
 {
-    /// <summary>
-    /// The QR format version. Increment when the payload structure changes.
-    /// </summary>
-    public int QRVersion { get; set; } = 1;
-
     public int CardId { get; set; }
 
-    /// <summary>
-    /// The card number (optional, for display purposes).
-    /// </summary>
-    public string? CardNumber { get; set; }
+    // NOTE: CardNumber intentionally removed to avoid embedding PAN in QR payload.
+    // NOTE: PlanId NOT included because QR is permanent but PlanId changes per trip.
+    // NOTE: QRVersion and CreatedAt removed to keep the payload minimal for reliable scanning.
 
     public string Token { get; set; } = string.Empty;
-    public DateTime CreatedAt { get; set; }
 }

@@ -1,74 +1,38 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TransitPay.API.Data;
 using TransitPay.API.DTOs.Payment;
+using TransitPay.API.Enums;
 using TransitPay.API.Interfaces;
+using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Payment controller for conductor-initiated payments.
+/// Canonical flow: TripPlan-based (passenger creates plan, driver scans QR, payment processed).
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
 public class PaymentController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
-    private readonly IPaymentSessionService _paymentSessionService;
     private readonly IQRService _qrService;
+    private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<PaymentController> _logger;
 
     public PaymentController(
         IPaymentService paymentService,
-        IPaymentSessionService paymentSessionService,
         IQRService qrService,
+        TransitPayDbContext dbContext,
         ILogger<PaymentController> logger)
     {
         _paymentService = paymentService;
-        _paymentSessionService = paymentSessionService;
         _qrService = qrService;
+        _dbContext = dbContext;
         _logger = logger;
-    }
-
-    /// <summary>
-    /// Creates or updates a PENDING payment session for a passenger's selected route.
-    /// The backend determines and locks the fare from the FareRules table.
-    /// </summary>
-    [HttpPost("session")]
-    public async Task<IActionResult> CreateOrUpdateSession([FromBody] CreatePaymentSessionRequest request)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
-        }
-
-        // Extract the authenticated user's ID from the JWT claims
-        var userId = GetUserIdFromClaims();
-        if (userId == null)
-        {
-            return Unauthorized(new { success = false, message = "User not authenticated." });
-        }
-
-        var result = await _paymentSessionService.CreateOrUpdateSessionAsync(
-            request.CardId, userId.Value, request.OriginStationId, request.DestinationStationId);
-
-        if (!result.Success)
-        {
-            return BadRequest(result);
-        }
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Retrieves the active PENDING payment session for a card.
-    /// </summary>
-    [HttpGet("session/{cardId}")]
-    public async Task<IActionResult> GetActiveSession(int cardId)
-    {
-        var result = await _paymentSessionService.GetActiveSessionAsync(cardId);
-        if (result == null)
-        {
-            return NotFound(new { success = false, message = "No active payment session found." });
-        }
-        return Ok(result);
     }
 
     /// <summary>
@@ -81,6 +45,13 @@ public class PaymentController : ControllerBase
         if (!ModelState.IsValid)
         {
             return BadRequest(new { success = false, message = "Validation failed." });
+        }
+
+        // Ownership validation: the card must belong to the authenticated user
+        var canAccess = await CanAccessCardAsync(request.CardId);
+        if (!canAccess)
+        {
+            return NotFound(new { success = false, message = "Card not found." });
         }
 
         try
@@ -106,6 +77,14 @@ public class PaymentController : ControllerBase
     [HttpGet("qr/{cardId}")]
     public async Task<IActionResult> GetQR(int cardId)
     {
+        // Ownership validation: the card must belong to the authenticated user,
+        // or the caller must be an Admin or Driver (who can scan/verify QR).
+        var canAccess = await CanAccessCardAsync(cardId);
+        if (!canAccess)
+        {
+            return NotFound(new { success = false, message = "Card not found." });
+        }
+
         try
         {
             var ticket = await _qrService.GetQRAsync(cardId);
@@ -148,48 +127,6 @@ public class PaymentController : ControllerBase
     }
 
     /// <summary>
-    /// Scans a passenger's permanent QR code and processes the payment.
-    /// The backend retrieves the active Payment Session, validates the card/wallet/route,
-    /// deducts the locked fare, records the transaction, and marks the session COMPLETED.
-    /// </summary>
-    [HttpPost("scan")]
-    [Authorize(Roles = "Driver,Admin")]
-    public async Task<IActionResult> ScanQR([FromBody] ScanQRRequest request)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(new { success = false, message = "Validation failed." });
-        }
-
-        // Extract the authenticated driver's ID from the JWT claims
-        var driverId = GetUserIdFromClaims();
-        if (driverId == null)
-        {
-            return Unauthorized(new { success = false, message = "Driver not authenticated." });
-        }
-
-        try
-        {
-            var result = await _paymentService.ProcessQRPaymentAsync(
-                request.QRData,
-                request.Signature,
-                driverId.Value);
-
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error scanning QR code");
-            return StatusCode(500, new { success = false, message = "Error processing QR code." });
-        }
-    }
-
-    /// <summary>
     /// Processes a conductor-initiated payment where the driver scans the QR code
     /// and selects the destination. The backend calculates the fare based on the
     /// active trip's origin, the selected destination, and the card's passenger type.
@@ -204,7 +141,7 @@ public class PaymentController : ControllerBase
         }
 
         // Extract the authenticated driver's ID from the JWT claims
-        var driverId = GetUserIdFromClaims();
+        var driverId = User.GetAuthenticatedUserId();
         if (driverId == null)
         {
             return Unauthorized(new { success = false, message = "Driver not authenticated." });
@@ -215,8 +152,7 @@ public class PaymentController : ControllerBase
             var result = await _paymentService.ProcessConductorPaymentAsync(
                 request.QRData,
                 request.Signature,
-                driverId.Value,
-                request.DestinationStationId);
+                driverId.Value);
 
             if (!result.Success)
             {
@@ -233,20 +169,72 @@ public class PaymentController : ControllerBase
     }
 
     /// <summary>
-    /// Extracts the authenticated user's ID from the JWT claims.
+    /// Processes a conductor-initiated physical card payment where the driver enters
+    /// the card number and selects the destination. The backend calculates the fare
+    /// based on the active trip's current boarding origin, the selected destination,
+    /// and the card's passenger type.
     /// </summary>
-    private int? GetUserIdFromClaims()
+    [HttpPost("scan-physical")]
+    [Authorize(Roles = "Driver,Admin")]
+    public async Task<IActionResult> ScanPhysicalCard([FromBody] ScanPhysicalCardRequest request)
     {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub")
-            ?? User.FindFirstValue("userId");
-
-        if (int.TryParse(userIdClaim, out var userId))
+        if (!ModelState.IsValid)
         {
-            return userId;
+            return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
         }
 
-        return null;
+        // Extract the authenticated driver's ID from the JWT claims
+        var driverId = User.GetAuthenticatedUserId();
+        if (driverId == null)
+        {
+            return Unauthorized(new { success = false, message = "Driver not authenticated." });
+        }
+
+        try
+        {
+            var result = await _paymentService.ProcessConductorPhysicalCardPaymentAsync(
+                request.CardNumber,
+                driverId.Value);
+
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing physical card payment for driver {DriverId}", driverId);
+            return StatusCode(500, new { success = false, message = "Error processing payment." });
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the authenticated user can access a specific card.
+    /// Owners may access their own cards. Admins and Drivers may access any card.
+    /// </summary>
+    private async Task<bool> CanAccessCardAsync(int cardId)
+    {
+        var userId = User.GetAuthenticatedUserId();
+        if (userId == null)
+        {
+            return false;
+        }
+
+        var isAdmin = User.IsInRole(nameof(RoleName.Admin));
+        var isDriver = User.IsInRole(nameof(RoleName.Driver));
+
+        if (isAdmin || isDriver)
+        {
+            return true;
+        }
+
+        var card = await _dbContext.Cards
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.CardId == cardId);
+
+        return card != null && card.UserId == userId.Value;
     }
 }
 

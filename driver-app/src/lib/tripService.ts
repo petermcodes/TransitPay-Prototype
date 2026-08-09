@@ -4,8 +4,11 @@ import { authService } from './auth';
 export interface Trip {
   tripId: number;
   driverId: number;
-  originStationId: number;
-  finalDestinationStationId?: number;
+  originTerminalId: number;
+  finalDestinationTerminalId?: number;
+  currentBoardingOriginTerminalId?: number;
+  currentBoardingOriginTerminalName?: string;
+  boardingOriginUpdatedAt?: string;
   tripStatus: 'Pending' | 'Active' | 'Completed' | 'Cancelled';
   passengerCount: number;
   totalRevenue: number;
@@ -13,19 +16,24 @@ export interface Trip {
   endTime?: string;
   createdAt: string;
   updatedAt?: string;
-  originStation?: Station;
-  finalDestinationStation?: Station;
+  originTerminal?: Terminal;
+  finalDestinationTerminal?: Terminal;
+  originTerminalName?: string;
+  finalDestinationTerminalName?: string;
+  routeName?: string;
+  startedAt?: string;
+  endedAt?: string;
 }
 
-export interface Station {
-  stationId: number;
-  stationName: string;
-  townId: number;
+export interface Terminal {
+  terminalId: number;
+  terminalName: string;
   isActive: boolean;
 }
 
 export interface StartTripRequest {
-  originStationId: number;
+  originTerminalId?: number;
+  finalDestinationTerminalId?: number;
 }
 
 export interface StartTripResponse {
@@ -40,11 +48,25 @@ export interface EndTripResponse {
   data?: Trip;
 }
 
+export interface TripHistoryResponse {
+  success: boolean;
+  message: string;
+  data: Trip[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+  };
+}
+
 export const tripService = {
   /**
    * Starts a new trip for the authenticated driver.
+   * Origin and destination are optional — the trip can be started immediately
+   * and the driver selects them afterward for scanning.
    */
-  async startTrip(originStationId: number): Promise<StartTripResponse> {
+  async startTrip(originTerminalId?: number, finalDestinationTerminalId?: number): Promise<StartTripResponse> {
     const token = authService.getToken();
     if (!token) {
       throw new Error('Not authenticated');
@@ -52,14 +74,12 @@ export const tripService = {
 
     const response = await api.post<StartTripResponse>(
       '/api/Trip/start',
-      { originStationId },
+      { 
+        OriginTerminalId: originTerminalId, 
+        FinalDestinationTerminalId: finalDestinationTerminalId 
+      },
       token
     );
-
-    if (response.success && response.data) {
-      // Persist active trip ID
-      localStorage.setItem('activeTripId', response.data.tripId.toString());
-    }
 
     return response;
   },
@@ -79,16 +99,12 @@ export const tripService = {
       token
     );
 
-    if (response.success) {
-      // Clear persisted trip ID
-      localStorage.removeItem('activeTripId');
-    }
-
     return response;
   },
 
   /**
    * Gets the active trip for the authenticated driver.
+   * The backend route is GET /api/Trip/active (driver ID comes from JWT).
    */
   async getActiveTrip(): Promise<Trip | null> {
     const token = authService.getToken();
@@ -96,20 +112,13 @@ export const tripService = {
       return null;
     }
 
-    const user = authService.getUser();
-    if (!user) {
-      return null;
-    }
-
     try {
       const response = await api.get<{ success: boolean; data: Trip }>(
-        `/api/Trip/active/${user.userId}`,
+        '/api/Trip/active',
         token
       );
 
       if (response.success && response.data) {
-        // Update persisted trip ID
-        localStorage.setItem('activeTripId', response.data.tripId.toString());
         return response.data;
       }
 
@@ -120,30 +129,83 @@ export const tripService = {
   },
 
   /**
-   * Resumes the active trip from localStorage if it exists.
-   * Call this on app startup to restore trip state.
+   * Resumes the active trip from the backend.
+   * The backend is the source of truth — no localStorage state.
    */
   async resumeActiveTrip(): Promise<Trip | null> {
-    const activeTripId = localStorage.getItem('activeTripId');
-    if (!activeTripId) {
-      return null;
-    }
-
-    // Fetch the active trip from backend
     return await this.getActiveTrip();
   },
 
   /**
-   * Clears the persisted trip state.
+   * Retrieves trip history for the authenticated driver with pagination.
    */
-  clearActiveTrip(): void {
-    localStorage.removeItem('activeTripId');
+  async getTripHistory(page = 1, pageSize = 20): Promise<{
+    data: Trip[];
+    pagination: { page: number; pageSize: number; totalCount: number; totalPages: number };
+  }> {
+    const token = authService.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await api.get<TripHistoryResponse>(
+      `/api/Trip/history?page=${page}&pageSize=${pageSize}`,
+      token
+    );
+
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to get trip history');
+    }
+
+    return {
+      data: response.data,
+      pagination: response.pagination,
+    };
   },
 
   /**
-   * Checks if there's an active trip persisted.
+   * Fetches the list of terminals for trip origin/destination selection.
+   * The backend TerminalController allows Driver and Admin roles.
    */
-  hasActiveTrip(): boolean {
-    return !!localStorage.getItem('activeTripId');
-  }
+  async getTerminals(): Promise<Terminal[]> {
+    const token = authService.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await api.get<{ success: boolean; data: Array<{ terminalId: number; terminalName: string; isActive: boolean }>; message?: string }>(
+      '/api/terminal',
+      token
+    );
+
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to get terminals');
+    }
+
+    // Map Terminal response to Terminal interface (backend returns camelCase)
+    return response.data.map(terminal => ({
+      terminalId: terminal.terminalId,
+      terminalName: terminal.terminalName,
+      isActive: terminal.isActive
+    }));
+  },
+
+  /**
+   * Updates the current boarding origin for an active trip.
+   * Only called when the conductor explicitly changes the boarding terminal.
+   */
+  async updateBoardingOrigin(tripId: number, originTerminalId: number): Promise<{ success: boolean; message: string }> {
+    const token = authService.getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await api.put<{ success: boolean; message: string }>(
+      `/api/Trip/${tripId}/boarding-origin`,
+      { OriginTerminalId: originTerminalId },
+      token
+    );
+
+    return response;
+  },
 };

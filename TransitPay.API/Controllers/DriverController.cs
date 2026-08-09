@@ -1,42 +1,45 @@
-using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using TransitPay.API.Data;
-using TransitPay.API.Enums;
-using TransitPay.API.Models;
+using TransitPay.API.DTOs.Admin;
+using TransitPay.API.Interfaces;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Manages Driver account lifecycle (Admin only).
+/// All logic is delegated to IAdminService (Administration Domain).
+/// Drivers are created active immediately — no approval workflow.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Admin")]
 public class DriverController : ControllerBase
 {
-    private readonly TransitPayDbContext _dbContext;
-    private readonly PasswordHasher<User> _passwordHasher;
+    private readonly IAdminService _adminService;
     private readonly ILogger<DriverController> _logger;
 
-    public DriverController(TransitPayDbContext dbContext, PasswordHasher<User> passwordHasher, ILogger<DriverController> logger)
+    public DriverController(IAdminService adminService, ILogger<DriverController> logger)
     {
-        _dbContext = dbContext;
-        _passwordHasher = passwordHasher;
+        _adminService = adminService;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Retrieves all drivers (Admin only).
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetDrivers()
+    public async Task<IActionResult> GetDrivers([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var driverRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == RoleName.Driver);
-        if (driverRole == null)
-        {
-            return Ok(new { success = true, message = "Drivers retrieved successfully.", data = new List<object>() });
-        }
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var drivers = await _dbContext.Users
-            .Where(u => u.RoleId == driverRole.RoleId)
-            .Select(u => new
+        var (drivers, total) = await _adminService.GetDriversAsync(page, pageSize);
+
+        return Ok(new
+        {
+            success = true,
+            message = "Drivers retrieved successfully.",
+            data = drivers.Select(u => new
             {
                 u.UserId,
                 u.FirstName,
@@ -45,12 +48,15 @@ public class DriverController : ControllerBase
                 u.Username,
                 u.IsActive,
                 u.CreatedAt
-            })
-            .ToListAsync();
-
-        return Ok(new { success = true, message = "Drivers retrieved successfully.", data = drivers });
+            }),
+            pagination = new { page, pageSize, total, totalPages = (int)Math.Ceiling(total / (double)pageSize) }
+        });
     }
 
+    /// <summary>
+    /// Creates a new Driver account (Admin only).
+    /// The driver is created active immediately — no approval workflow.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> CreateDriver([FromBody] CreateDriverRequest request)
     {
@@ -61,39 +67,12 @@ public class DriverController : ControllerBase
 
         try
         {
-            var driverRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == RoleName.Driver);
-            if (driverRole == null)
-            {
-                return BadRequest(new { success = false, message = "Driver role not found." });
-            }
-
-            var existingUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber);
-            if (existingUser != null)
-            {
-                return BadRequest(new { success = false, message = "A user with this mobile number already exists." });
-            }
-
-            var driver = new User
-            {
-                Username = request.MobileNumber,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                MobileNumber = request.MobileNumber,
-                PasswordHash = _passwordHasher.HashPassword(null!, request.Password),
-                IsActive = false, // Drivers start as pending until approved
-                RoleId = driverRole.RoleId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _dbContext.Users.Add(driver);
-            await _dbContext.SaveChangesAsync();
-
-            _logger.LogInformation("Driver created successfully. UserId: {UserId}", driver.UserId);
+            var driver = await _adminService.CreateDriverAsync(request);
 
             return Ok(new
             {
                 success = true,
-                message = "Driver created successfully. Pending approval.",
+                message = "Driver created successfully.",
                 data = new
                 {
                     driver.UserId,
@@ -105,6 +84,11 @@ public class DriverController : ControllerBase
                 }
             });
         }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to create driver: {Message}", ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating driver");
@@ -112,78 +96,125 @@ public class DriverController : ControllerBase
         }
     }
 
-    [HttpPut("{id}/approve")]
-    public async Task<IActionResult> ApproveDriver(int id)
+    /// <summary>
+    /// Activates a driver account (Admin only).
+    /// </summary>
+    [HttpPut("{id}/activate")]
+    public async Task<IActionResult> ActivateDriver(int id)
     {
         try
         {
-            var driver = await _dbContext.Users.FindAsync(id);
-            if (driver == null)
+            var driver = await _adminService.ActivateUserAsync(id);
+
+            return Ok(new
             {
-                return NotFound(new { success = false, message = "Driver not found." });
-            }
-
-            var driverRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == RoleName.Driver);
-            if (driverRole == null || driver.RoleId != driverRole.RoleId)
-            {
-                return BadRequest(new { success = false, message = "User is not a driver." });
-            }
-
-            driver.IsActive = true;
-            await _dbContext.SaveChangesAsync();
-
-            _logger.LogInformation("Driver approved. UserId: {UserId}", id);
-
-            return Ok(new { success = true, message = "Driver approved successfully." });
+                success = true,
+                message = "Driver activated successfully.",
+                data = new
+                {
+                    driver.UserId,
+                    driver.IsActive
+                }
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to activate driver {UserId}: {Message}", id, ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error approving driver {UserId}", id);
-            return StatusCode(500, new { success = false, message = "An error occurred while approving the driver." });
+            _logger.LogError(ex, "Error activating driver {UserId}", id);
+            return StatusCode(500, new { success = false, message = "An error occurred while activating the driver." });
         }
     }
 
-    [HttpPut("{id}/reject")]
-    public async Task<IActionResult> RejectDriver(int id)
+    /// <summary>
+    /// Deactivates a driver account (Admin only).
+    /// Deactivated drivers cannot authenticate. No data is deleted.
+    /// </summary>
+    [HttpPut("{id}/deactivate")]
+    public async Task<IActionResult> DeactivateDriver(int id)
     {
         try
         {
-            var driver = await _dbContext.Users.FindAsync(id);
-            if (driver == null)
+            var driver = await _adminService.DeactivateUserAsync(id);
+
+            return Ok(new
             {
-                return NotFound(new { success = false, message = "Driver not found." });
-            }
-
-            _dbContext.Users.Remove(driver);
-            await _dbContext.SaveChangesAsync();
-
-            _logger.LogInformation("Driver rejected and removed. UserId: {UserId}", id);
-
-            return Ok(new { success = true, message = "Driver rejected and removed." });
+                success = true,
+                message = "Driver deactivated successfully.",
+                data = new
+                {
+                    driver.UserId,
+                    driver.IsActive
+                }
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to deactivate driver {UserId}: {Message}", id, ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error rejecting driver {UserId}", id);
-            return StatusCode(500, new { success = false, message = "An error occurred while rejecting the driver." });
+            _logger.LogError(ex, "Error deactivating driver {UserId}", id);
+            return StatusCode(500, new { success = false, message = "An error occurred while deactivating the driver." });
         }
     }
-}
 
-public class CreateDriverRequest
-{
-    [Required(ErrorMessage = "First name is required.")]
-    [StringLength(50, MinimumLength = 2)]
-    public string FirstName { get; set; } = string.Empty;
+    /// <summary>
+    /// Resets a driver's password (Admin only).
+    /// Applies the password policy and clears any account lockout.
+    /// </summary>
+    [HttpPost("{id}/reset-password")]
+    public async Task<IActionResult> ResetDriverPassword(int id, [FromBody] ResetPasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new { success = false, message = "Validation failed.", errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+        }
 
-    [Required(ErrorMessage = "Last name is required.")]
-    [StringLength(50, MinimumLength = 2)]
-    public string LastName { get; set; } = string.Empty;
+        try
+        {
+            await _adminService.ResetUserPasswordAsync(id, request.NewPassword);
 
-    [Required(ErrorMessage = "Mobile number is required.")]
-    [StringLength(15, MinimumLength = 10)]
-    public string MobileNumber { get; set; } = string.Empty;
+            return Ok(new { success = true, message = "Password reset successfully." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to reset password for driver {UserId}: {Message}", id, ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting password for driver {UserId}", id);
+            return StatusCode(500, new { success = false, message = "An error occurred while resetting the password." });
+        }
+    }
 
-    [Required(ErrorMessage = "Password is required.")]
-    [StringLength(100, MinimumLength = 8)]
-    public string Password { get; set; } = string.Empty;
+    /// <summary>
+    /// Unlocks a locked driver account (Admin only).
+    /// Clears lockout and resets failed login attempts.
+    /// </summary>
+    [HttpPost("{id}/unlock")]
+    public async Task<IActionResult> UnlockDriver(int id)
+    {
+        try
+        {
+            await _adminService.UnlockUserAccountAsync(id);
+
+            return Ok(new { success = true, message = "Driver account unlocked successfully." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Failed to unlock driver {UserId}: {Message}", id, ex.Message);
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error unlocking driver {UserId}", id);
+            return StatusCode(500, new { success = false, message = "An error occurred while unlocking the driver." });
+        }
+    }
 }

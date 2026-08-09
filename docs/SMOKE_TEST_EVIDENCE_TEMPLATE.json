@@ -1,0 +1,54 @@
+{
+  "metadata": {
+    "date": "",
+    "executor": "",
+    "commit": "",
+    "apiUrl": "",
+    "db": ""
+  },
+  "commands": {
+    "dotnet_build": { "command": "dotnet build", "outputFile": "" },
+    "dotnet_test": { "command": "dotnet test", "outputFile": "" },
+    "run_smoke_script": { "command": "run_smoke_tests.ps1 -ApiUrl <url>", "outputFile": "" }
+  },
+  "authentication": {
+    "register": { "status": "", "responseSample": "", "notes": "" },
+    "login": { "status": "", "tokenIssued": false, "refreshToken": false, "notes": "" },
+    "refresh": { "status": "", "tokenRotated": false, "notes": "" },
+    "logout": { "status": "", "notes": "" }
+  },
+  "passenger": {
+    "cards_me": { "status": "", "maskedPresent": false, "rawPresent": false, "sample": "" },
+    "qr": { "status": "", "maskedPresent": false, "dataBase64": "", "decoded": "", "panDetected": false },
+    "payments": []
+  },
+  "driver": {
+    "stations": { "status": "", "sample": "" },
+    "activeTrip": { "status": "", "sample": "" },
+    "scan_physical": { "status": "", "maskedPresent": false, "rawPresent": false }
+  },
+  "admin": {
+    "login": { "status": "", "sample": "" },
+    "drivers": { "status": "", "sample": "", "maskedPresent": false }
+  },
+  "runtime_verification": {
+    "endpoints_checked": [],
+    "contract_mismatches": [],
+    "serialization_errors": []
+  },
+  "pan_detection": {
+    "regex": "\\b\\d{12,19}\\b",
+    "failures": []
+  },
+  "artifacts": {
+    "build_output": "",
+    "test_output": "",
+    "smoke_stdout": "",
+    "responses_folder": ""
+  },
+  "final_assessment": {
+    "overall_result": "",
+    "issues": [],
+    "recommendation": ""
+  }
+}

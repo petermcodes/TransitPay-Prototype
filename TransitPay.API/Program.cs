@@ -1,7 +1,11 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Threading.RateLimiting;
+using TransitPay.API.Configuration;
 using TransitPay.API.Data;
 using TransitPay.API.Enums;
 using TransitPay.API.Interfaces;
@@ -18,7 +22,13 @@ var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD")
         "Set it before starting the application (e.g., set DB_PASSWORD=your-db-password).");
 
 // Add services
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Serialize enums as strings (e.g., "PAYMENT" instead of 0) so the
+        // frontend can call .toLowerCase() on transaction types.
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
@@ -53,17 +63,27 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<TransitPayDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+// Register configuration options
+builder.Services.Configure<AuthenticationSettings>(
+    builder.Configuration.GetSection("Authentication"));
+
+// HttpContext accessor for auth audit logging (client IP)
+builder.Services.AddHttpContextAccessor();
+
 // Register services
 builder.Services.AddScoped<PasswordHasher<User>>();
 builder.Services.AddScoped<ISecurityKeyProvider, SecurityKeyProvider>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IQRService, QRService>();
-builder.Services.AddScoped<IPaymentSessionService, PaymentSessionService>();
 builder.Services.AddScoped<TransactionReferenceNumberGenerator>();
 builder.Services.AddScoped<ITripService, TripService>();
+builder.Services.AddScoped<ITripPlanService, TripPlanService>();
 builder.Services.AddScoped<IDiscountService, DiscountService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<ICardService, CardService>();
+builder.Services.AddScoped<FareCalculator>();
 
 // JWT authentication using the centralized security key provider
 // This ensures JWT signing and QR signing use the exact same key source.
@@ -89,6 +109,29 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+// Rate limiting for authentication endpoints
+var authRateLimit = builder.Configuration.GetSection("RateLimiting:Auth");
+var authPermitLimit = authRateLimit.GetValue<int>("PermitLimit");
+var authWindowMinutes = authRateLimit.GetValue<int>("WindowMinutes");
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("auth", context =>
+    {
+        // Rate limit per client IP address
+        var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = authPermitLimit,
+            Window = TimeSpan.FromMinutes(authWindowMinutes),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
+
 // Health checks
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<TransitPayDbContext>("database");
@@ -110,34 +153,44 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<TransitPayDbContext>();
     db.Database.Migrate();
 
-    // Seed roles
-    if (!db.Roles.Any())
+    // Seed roles - ensure all required roles exist
+    var passengerRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Passenger);
+    if (passengerRole == null)
     {
-        db.Roles.AddRange(
-            new Role { RoleName = RoleName.Passenger },
-            new Role { RoleName = RoleName.Driver },
-            new Role { RoleName = RoleName.Admin });
-        db.SaveChanges();
+        passengerRole = new Role { RoleName = RoleName.Passenger };
+        db.Roles.Add(passengerRole);
     }
 
-    // Seed towns and stations
-    if (!db.Towns.Any())
+    var driverRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Driver);
+    if (driverRole == null)
     {
-        var town = new Town { TownName = "Lagos", IsActive = true, CreatedAt = DateTime.UtcNow };
-        db.Towns.Add(town);
-        db.SaveChanges();
+        driverRole = new Role { RoleName = RoleName.Driver };
+        db.Roles.Add(driverRole);
+    }
 
-        var origin = new Station { TownId = town.TownId, StationName = "Central Station", IsActive = true, CreatedAt = DateTime.UtcNow };
-        var destination = new Station { TownId = town.TownId, StationName = "Airport Station", IsActive = true, CreatedAt = DateTime.UtcNow };
-        db.Stations.AddRange(origin, destination);
+    var adminRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Admin);
+    if (adminRole == null)
+    {
+        adminRole = new Role { RoleName = RoleName.Admin };
+        db.Roles.Add(adminRole);
+    }
+
+    db.SaveChanges();
+
+    // Seed terminals
+    if (!db.Terminals.Any())
+    {
+        var origin = new Terminal { TerminalName = "Central Terminal", IsActive = true, CreatedAt = DateTime.UtcNow };
+        var destination = new Terminal { TerminalName = "Airport Terminal", IsActive = true, CreatedAt = DateTime.UtcNow };
+        db.Terminals.AddRange(origin, destination);
         db.SaveChanges();
 
         // Seed fare rules for both directions
         db.FareRules.AddRange(
             new FareRule
             {
-                OriginStationId = origin.StationId,
-                DestinationStationId = destination.StationId,
+                OriginTerminalId = origin.TerminalId,
+                DestinationTerminalId = destination.TerminalId,
                 VehicleType = VehicleType.BUS,
                 PassengerType = PassengerType.Passenger,
                 FareAmount = 12.50m,
@@ -147,8 +200,8 @@ using (var scope = app.Services.CreateScope())
             },
             new FareRule
             {
-                OriginStationId = destination.StationId,
-                DestinationStationId = origin.StationId,
+                OriginTerminalId = destination.TerminalId,
+                DestinationTerminalId = origin.TerminalId,
                 VehicleType = VehicleType.BUS,
                 PassengerType = PassengerType.Passenger,
                 FareAmount = 12.50m,
@@ -159,10 +212,16 @@ using (var scope = app.Services.CreateScope())
         db.SaveChanges();
     }
 
-    // Seed admin user
-    var adminRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Admin);
+    // Seed admin user via secure bootstrap initialization.
+    // The initial admin password comes from the ADMIN_BOOTSTRAP_PASSWORD environment variable.
+    // No hardcoded default credentials are ever used.
     if (adminRole != null && !db.Users.Any(u => u.Username == "Admin"))
     {
+        var bootstrapPassword = Environment.GetEnvironmentVariable("ADMIN_BOOTSTRAP_PASSWORD")
+            ?? throw new InvalidOperationException(
+                "ADMIN_BOOTSTRAP_PASSWORD environment variable is not set. " +
+                "Set it before starting the application to bootstrap the initial administrator account.");
+
         var passwordHasher = scope.ServiceProvider.GetRequiredService<PasswordHasher<User>>();
         var adminUser = new User
         {
@@ -170,9 +229,10 @@ using (var scope = app.Services.CreateScope())
             FirstName = "System",
             LastName = "Administrator",
             MobileNumber = "0000000000",
-            PasswordHash = passwordHasher.HashPassword(null!, "Admin"),
+            PasswordHash = passwordHasher.HashPassword(null!, bootstrapPassword),
             IsActive = true,
             RoleId = adminRole.RoleId,
+            PasswordChangedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
         db.Users.Add(adminUser);
@@ -184,7 +244,9 @@ using (var scope = app.Services.CreateScope())
     {
         var card = new Card
         {
-            CardNumber = "4111111111111111",
+            // Use a non-contiguous test card string in source to avoid embedding a raw PAN literal.
+            // The application and masking utilities only require the last four digits to be present for display.
+            CardNumber = "4111-1111-1111-1111",
             Status = CardStatus.ACTIVE,
             PassengerType = PassengerType.Passenger,
             IssueDate = DateTime.UtcNow,
@@ -252,6 +314,7 @@ app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 app.UseCors("FrontendApps");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

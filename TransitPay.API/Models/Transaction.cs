@@ -16,14 +16,6 @@ public class Transaction
     public int? CardId { get; set; }
 
     /// <summary>
-    /// The payment session that produced this transaction.
-    /// Links the transaction to the session for audit purposes.
-    /// </summary>
-    [ForeignKey(nameof(PaymentSession))]
-    [Column("payment_session_id")]
-    public Guid? PaymentSessionId { get; set; }
-
-    /// <summary>
     /// The driver (User) who processed this payment via QR scan.
     /// Null if the driver is unknown.
     /// </summary>
@@ -40,19 +32,34 @@ public class Transaction
     public int? TripId { get; set; }
 
     /// <summary>
-    /// The origin station where the passenger boarded.
+    /// The origin terminal where the passenger boarded.
     /// </summary>
-    [ForeignKey(nameof(OriginStation))]
-    [Column("origin_station_id")]
-    public int? OriginStationId { get; set; }
+    [ForeignKey(nameof(OriginTerminal))]
+    [Column("origin_terminal_id")]
+    public int? OriginTerminalId { get; set; }
 
     /// <summary>
-    /// The destination station (where the passenger is going).
-    /// This was previously called StationId.
+    /// Snapshot of the origin terminal name at the time of the transaction.
+    /// Preserved for historical/audit purposes even if the terminal is later renamed.
     /// </summary>
-    [ForeignKey(nameof(Station))]
-    [Column("station_id")]
-    public int? StationId { get; set; }
+    [Column("origin_terminal_name")]
+    [MaxLength(100)]
+    public string? OriginTerminalName { get; set; }
+
+    /// <summary>
+    /// The destination terminal (where the passenger is going).
+    /// </summary>
+    [ForeignKey(nameof(Terminal))]
+    [Column("terminal_id")]
+    public int? TerminalId { get; set; }
+
+    /// <summary>
+    /// Snapshot of the destination terminal name at the time of the transaction.
+    /// Preserved for historical/audit purposes even if the terminal is later renamed.
+    /// </summary>
+    [Column("destination_terminal_name")]
+    [MaxLength(100)]
+    public string? DestinationTerminalName { get; set; }
 
     /// <summary>
     /// The fare rule ID that was applied for this transaction.
@@ -89,6 +96,13 @@ public class Transaction
     /// </summary>
     [Column("final_fare")]
     public decimal FinalFare { get; set; }
+
+    /// <summary>
+    /// The wallet balance remaining after this payment was deducted.
+    /// Stored for historical/audit purposes.
+    /// </summary>
+    [Column("remaining_balance")]
+    public decimal RemainingBalance { get; set; }
 
     /// <summary>
     /// The discount type applied (if any).
@@ -128,6 +142,23 @@ public class Transaction
     [Column("reference_number")]
     public string? ReferenceNumber { get; set; }
 
+    /// <summary>
+    /// Business idempotency key that uniquely identifies a single scan/charge event.
+    /// Used to prevent duplicate payments on network retries or double scans.
+    /// Nullable for backward compatibility with pre-existing transactions.
+    /// </summary>
+    [Column("payment_request_key")]
+    [MaxLength(64)]
+    public string? PaymentRequestKey { get; set; }
+
+    /// <summary>
+    /// The payment mode used for top-ups (e.g., "GCash", "PayMaya", "Bank Transfer", "Admin").
+    /// Null for fare payments.
+    /// </summary>
+    [Column("payment_mode")]
+    [MaxLength(50)]
+    public string? PaymentMode { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -137,12 +168,15 @@ public class Transaction
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 
+    [Timestamp]
+    [Column("row_version")]
+    public byte[] RowVersion { get; set; } = [];
+
     public Card? Card { get; set; }
-    public PaymentSession? PaymentSession { get; set; }
     public User? Driver { get; set; }
     public Trip? Trip { get; set; }
-    public Station? Station { get; set; }
-    public Station? OriginStation { get; set; }
+    public Terminal? Terminal { get; set; }
+    public Terminal? OriginTerminal { get; set; }
     public FareRule? FareRule { get; set; }
     public DiscountType? DiscountType { get; set; }
 }

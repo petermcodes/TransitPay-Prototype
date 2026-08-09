@@ -16,7 +16,7 @@ export interface LoginResponse {
 }
 
 export interface LoginRequest {
-  mobileNumber: string;
+  username: string;
   password: string;
 }
 
@@ -50,7 +50,16 @@ export const authService = {
     return response.data;
   },
 
-  logout() {
+  async logout(): Promise<void> {
+    const userId = this.getUser()?.userId;
+    const token = this.getToken();
+    if (userId && token) {
+      try {
+        await api.post('/api/auth/logout', {}, token);
+      } catch {
+        // Server-side token revocation is best-effort; clear local state regardless.
+      }
+    }
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);

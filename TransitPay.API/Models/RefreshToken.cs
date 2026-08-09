@@ -26,5 +26,13 @@ public class RefreshToken
     [Column("revoked")]
     public bool Revoked { get; set; } = false;
 
+    /// <summary>
+    /// The ID of the replacement refresh token created during rotation.
+    /// When a refresh token is used successfully, it is revoked and this
+    /// field points to the new token. Used for reuse detection.
+    /// </summary>
+    [Column("replaced_by_token_id")]
+    public int? ReplacedByTokenId { get; set; }
+
     public User? User { get; set; }
 }

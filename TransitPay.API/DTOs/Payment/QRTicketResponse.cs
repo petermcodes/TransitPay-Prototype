@@ -24,7 +24,8 @@ public class QRTicketResponse
     public int CardId { get; set; }
 
     /// <summary>
-    /// The card number (masked for display, e.g., "•••• 4821").
+    /// The masked card number for display (e.g., "•••• 4821").
+    /// The full card number is never included in the QR payload or response.
     /// </summary>
-    public string? CardNumber { get; set; }
+    public string? MaskedCardNumber { get; set; }
 }

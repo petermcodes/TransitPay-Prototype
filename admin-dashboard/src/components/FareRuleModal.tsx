@@ -1,62 +1,62 @@
 import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
-import type { Station } from '../lib/admin'
+import type { Terminal } from '../lib/admin'
 
 interface FareRuleModalProps {
   isOpen: boolean
   onClose: () => void
   onSubmit: (data: {
-    originStationId: number
-    destinationStationId: number
-    vehicleType: string
-    passengerType: string
+    originTerminalId: number
+    destinationTerminalId: number
     fareAmount: number
     effectiveDate: string
   }) => Promise<void>
-  stations: Station[]
+  terminals: Terminal[]
   loading?: boolean
+  initialData?: {
+    originTerminalId: number
+    destinationTerminalId: number
+    fareAmount: number
+    effectiveDate: string
+  }
 }
 
-export function FareRuleModal({ isOpen, onClose, onSubmit, stations, loading = false }: FareRuleModalProps) {
-  const [originStationId, setOriginStationId] = useState<number>(0)
-  const [destinationStationId, setDestinationStationId] = useState<number>(0)
-  const [vehicleType, setVehicleType] = useState('Bus')
-  const [passengerType, setPassengerType] = useState('Regular')
+export function FareRuleModal({ isOpen, onClose, onSubmit, terminals, loading = false, initialData }: FareRuleModalProps) {
+  const [originTerminalId, setOriginTerminalId] = useState<number>(0)
+  const [destinationTerminalId, setDestinationTerminalId] = useState<number>(0)
   const [fareAmount, setFareAmount] = useState('')
   const [effectiveDate, setEffectiveDate] = useState('')
   const [errors, setErrors] = useState<{
-    originStationId?: string
-    destinationStationId?: string
+    originTerminalId?: string
+    destinationTerminalId?: string
     fareAmount?: string
     effectiveDate?: string
   }>({})
 
   useEffect(() => {
     if (isOpen) {
-      setOriginStationId(stations[0]?.stationId || 0)
-      setDestinationStationId(stations[1]?.stationId || 0)
-      setVehicleType('Bus')
-      setPassengerType('Regular')
-      setFareAmount('')
-      setEffectiveDate(new Date().toISOString().split('T')[0])
+      setOriginTerminalId(initialData?.originTerminalId || terminals[0]?.terminalId || 0)
+      setDestinationTerminalId(initialData?.destinationTerminalId || terminals[1]?.terminalId || 0)
+      setFareAmount(initialData ? String(initialData.fareAmount) : '')
+      setEffectiveDate(initialData?.effectiveDate?.split('T')[0] || new Date().toISOString().split('T')[0])
       setErrors({})
     }
-  }, [isOpen, stations])
+  }, [isOpen, terminals, initialData])
 
   const validate = (): boolean => {
     const newErrors: typeof errors = {}
 
-    if (!originStationId) {
-      newErrors.originStationId = 'Please select origin station'
+    if (!originTerminalId) {
+      newErrors.originTerminalId = 'Please select origin terminal'
     }
 
-    if (!destinationStationId) {
-      newErrors.destinationStationId = 'Please select destination station'
+    if (!destinationTerminalId) {
+      newErrors.destinationTerminalId = 'Please select destination terminal'
     }
 
-    if (originStationId && destinationStationId && originStationId === destinationStationId) {
-      newErrors.destinationStationId = 'Origin and destination must be different'
+    if (originTerminalId && destinationTerminalId && originTerminalId === destinationTerminalId) {
+      newErrors.destinationTerminalId = 'Origin and destination must be different'
     }
 
     if (!fareAmount || Number(fareAmount) <= 0) {
@@ -78,10 +78,8 @@ export function FareRuleModal({ isOpen, onClose, onSubmit, stations, loading = f
 
     try {
       await onSubmit({
-        originStationId,
-        destinationStationId,
-        vehicleType,
-        passengerType,
+        originTerminalId,
+        destinationTerminalId,
         fareAmount: Number(fareAmount),
         effectiveDate
       })
@@ -92,78 +90,45 @@ export function FareRuleModal({ isOpen, onClose, onSubmit, stations, loading = f
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add New Fare Rule" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={initialData ? 'Edit Fare Rule' : 'Add New Fare Rule'} size="lg">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Origin Station <span className="text-red-500">*</span>
+              Origin Terminal <span className="text-red-500">*</span>
             </label>
             <select
-              value={originStationId}
-              onChange={e => setOriginStationId(Number(e.target.value))}
+              value={originTerminalId}
+              onChange={e => setOriginTerminalId(Number(e.target.value))}
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
             >
               <option value="">Select origin</option>
-              {stations.map(station => (
-                <option key={station.stationId} value={station.stationId}>
-                  {station.stationName}
+              {terminals.map(terminal => (
+                <option key={terminal.terminalId} value={terminal.terminalId}>
+                  {terminal.terminalName}
                 </option>
               ))}
             </select>
-            {errors.originStationId && <p className="text-red-500 text-xs mt-1">{errors.originStationId}</p>}
+            {errors.originTerminalId && <p className="text-red-500 text-xs mt-1">{errors.originTerminalId}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Destination Station <span className="text-red-500">*</span>
+              Destination Terminal <span className="text-red-500">*</span>
             </label>
             <select
-              value={destinationStationId}
-              onChange={e => setDestinationStationId(Number(e.target.value))}
+              value={destinationTerminalId}
+              onChange={e => setDestinationTerminalId(Number(e.target.value))}
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
             >
               <option value="">Select destination</option>
-              {stations.map(station => (
-                <option key={station.stationId} value={station.stationId}>
-                  {station.stationName}
+              {terminals.map(terminal => (
+                <option key={terminal.terminalId} value={terminal.terminalId}>
+                  {terminal.terminalName}
                 </option>
               ))}
             </select>
-            {errors.destinationStationId && <p className="text-red-500 text-xs mt-1">{errors.destinationStationId}</p>}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Vehicle Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={vehicleType}
-              onChange={e => setVehicleType(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
-            >
-              <option value="Bus">Bus</option>
-              <option value="Jeepney">Jeepney</option>
-              <option value="UV Express">UV Express</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Passenger Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={passengerType}
-              onChange={e => setPassengerType(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
-            >
-              <option value="Regular">Regular</option>
-              <option value="Student">Student</option>
-              <option value="Senior">Senior</option>
-              <option value="PWD">PWD</option>
-            </select>
+            {errors.destinationTerminalId && <p className="text-red-500 text-xs mt-1">{errors.destinationTerminalId}</p>}
           </div>
         </div>
 
@@ -213,7 +178,7 @@ export function FareRuleModal({ isOpen, onClose, onSubmit, stations, loading = f
             className="flex-1 px-4 py-2.5 rounded-xl bg-blue-gradient text-white font-semibold hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading && <Spinner size="sm" />}
-            {loading ? 'Adding...' : 'Add Fare Rule'}
+            {loading ? 'Saving...' : initialData ? 'Save Changes' : 'Add Fare Rule'}
           </button>
         </div>
       </form>

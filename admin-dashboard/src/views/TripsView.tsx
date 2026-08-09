@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Search, Plus, Eye, Edit2, Trash2, CheckCircle, XCircle, AlertCircle, Bus } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { adminService } from '../lib/admin'
-import { Btn, Chip } from '../AdminApp'
+import { Chip } from '../AdminApp'
 import type { Trip } from '../lib/admin'
 
 type StatusFilter = 'all' | 'Pending' | 'Active' | 'Completed' | 'Cancelled'
 
-export function TripsView({ onAddTrip }: { onAddTrip: () => void }) {
+export function TripsView() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -28,28 +28,6 @@ export function TripsView({ onAddTrip }: { onAddTrip: () => void }) {
       console.error('Failed to load trips:', err)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleEndTrip = async (tripId: number) => {
-    if (!confirm('Are you sure you want to end this trip?')) return
-    try {
-      await adminService.endTrip(tripId)
-      alert('Trip ended successfully')
-      loadTrips()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to end trip')
-    }
-  }
-
-  const handleCancelTrip = async (tripId: number) => {
-    if (!confirm('Are you sure you want to cancel this trip?')) return
-    try {
-      await adminService.cancelTrip(tripId)
-      alert('Trip cancelled successfully')
-      loadTrips()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to cancel trip')
     }
   }
 
@@ -89,7 +67,6 @@ export function TripsView({ onAddTrip }: { onAddTrip: () => void }) {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search trips..."
               className="pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 w-44 focus:outline-none focus:border-blue-400 transition-all" />
           </div>
-          <Btn variant="primary" size="md" onClick={onAddTrip}><Plus size={14} /> Add Trip</Btn>
         </div>
       </div>
 
@@ -103,7 +80,7 @@ export function TripsView({ onAddTrip }: { onAddTrip: () => void }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-slate-100 bg-slate-50">
-                {['Trip ID', 'Driver', 'Route', 'Status', 'Passengers', 'Revenue', 'Started', 'Actions'].map(h => (
+                {['Trip ID', 'Driver', 'Route', 'Status', 'Passengers', 'Revenue', 'Started'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr></thead>
@@ -121,8 +98,8 @@ export function TripsView({ onAddTrip }: { onAddTrip: () => void }) {
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col">
-                        <span className="font-medium text-slate-800 text-xs">{trip.originStationName}</span>
-                        <span className="text-slate-400 text-xs">→ {trip.finalDestinationStationName}</span>
+                        <span className="font-medium text-slate-800 text-xs">{trip.originTerminalName}</span>
+                        <span className="text-slate-400 text-xs">→ {trip.finalDestinationTerminalName}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3.5 whitespace-nowrap">
@@ -137,27 +114,6 @@ export function TripsView({ onAddTrip }: { onAddTrip: () => void }) {
                         hour: '2-digit', 
                         minute: '2-digit' 
                       }) : '-'}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"><Eye size={14} /></button>
-                        {(trip.tripStatus === 'Active' || trip.tripStatus === 'Pending') && (
-                          <>
-                            <button 
-                              onClick={() => handleEndTrip(trip.tripId)}
-                              className="p-1.5 rounded-lg hover:bg-green-50 text-slate-400 hover:text-green-600 transition-colors"
-                              title="End Trip">
-                              <CheckCircle size={14} />
-                            </button>
-                            <button 
-                              onClick={() => handleCancelTrip(trip.tripId)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
-                              title="Cancel Trip">
-                              <XCircle size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
                     </td>
                   </tr>
                 ))}
