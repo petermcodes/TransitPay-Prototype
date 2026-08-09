@@ -186,6 +186,25 @@ The tests were updated to reflect this relaxed policy (Option A):
 
 ---
 
+## TRN (Transaction Reference Number) Uniqueness Fix — COMPLETED ✅
+
+**Original Issue:** TRN numbers could be identical for different transactions because `TransactionReferenceNumberGenerator` used a read-then-write race condition. Two concurrent payments (different drivers/passengers) could both generate the same sequence number.
+
+**Changes:**
+- `TransactionReferenceNumberGenerator.cs` — Rewritten to use an **atomic counter table** (`trn_counters`). Each call performs a single `INSERT ... ON CONFLICT ... RETURNING` statement that the DB serializes, so concurrent calls always get distinct sequence numbers.
+- `Migrations/20260809031800_AddTrnCounterTable.cs` — New migration creating `trn_counters` table with `counter_date` PK and `last_sequence`.
+- Uses UTC date consistently between the C# prefix (`DateTime.UtcNow`) and SQL (`now() AT TIME ZONE 'UTC'`).
+
+**Resulting guarantees:**
+- ✅ Same transaction → driver & passenger both see the same TRN (stored once on the single Transaction record)
+- ✅ Different transactions → always distinct TRNs (even under concurrency)
+- ✅ One receipt per TRN (unique index on TransactionReferenceNumber remains as safety net)
+- ✅ Refund-ready: a single TRN unambiguously identifies one transaction
+
+**Verification:** ✅ All 74 tests pass. ✅ Backend builds.
+
+---
+
 ## Remaining Work (P2-10 + P3)
 1. **P2-10:** Add integration tests (deferred by user)
 2. **P3:** E2E tests, load testing, security audit, documentation
