@@ -20,7 +20,7 @@ public class PaymentService : IPaymentService
 {
     private readonly TransitPayDbContext _dbContext;
     private readonly IQRService _qrService;
-    private readonly TransactionReferenceNumberGenerator _trnGenerator;
+    private readonly ITransactionReferenceNumberGenerator _trnGenerator;
     private readonly ITripService _tripService;
     private readonly IDiscountService _discountService;
     private readonly ILogger<PaymentService> _logger;
@@ -28,7 +28,7 @@ public class PaymentService : IPaymentService
     public PaymentService(
         TransitPayDbContext dbContext,
         IQRService qrService,
-        TransactionReferenceNumberGenerator trnGenerator,
+        ITransactionReferenceNumberGenerator trnGenerator,
         ITripService tripService,
         IDiscountService discountService,
         ILogger<PaymentService> logger)

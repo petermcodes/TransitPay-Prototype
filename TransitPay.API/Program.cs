@@ -61,7 +61,8 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
         "Connection string 'DefaultConnection' is not configured in appsettings.json.");
 
 builder.Services.AddDbContext<TransitPayDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString)
+        .ConfigureWarnings(warnings => warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // Register configuration options
 builder.Services.Configure<AuthenticationSettings>(
@@ -76,7 +77,7 @@ builder.Services.AddScoped<ISecurityKeyProvider, SecurityKeyProvider>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IQRService, QRService>();
-builder.Services.AddScoped<TransactionReferenceNumberGenerator>();
+builder.Services.AddScoped<ITransactionReferenceNumberGenerator, TransactionReferenceNumberGenerator>();
 builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<ITripPlanService, TripPlanService>();
 builder.Services.AddScoped<IDiscountService, DiscountService>();
@@ -151,7 +152,13 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<TransitPayDbContext>();
-    db.Database.Migrate();
+    
+    // Apply migrations only for relational providers (e.g., PostgreSQL).
+    // The InMemory provider used by integration tests does not support migrations.
+    if (db.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        db.Database.Migrate();
+    }
 
     // Seed roles - ensure all required roles exist
     var passengerRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Passenger);
@@ -251,7 +258,8 @@ using (var scope = app.Services.CreateScope())
             PassengerType = PassengerType.Passenger,
             IssueDate = DateTime.UtcNow,
             ExpiryDate = DateTime.UtcNow.AddYears(2),
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }
         };
         db.Cards.Add(card);
         db.SaveChanges();
@@ -322,3 +330,8 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+/// <summary>
+/// Exposes the Program class for integration testing via WebApplicationFactory.
+/// </summary>
+public partial class Program { }

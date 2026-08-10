@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Data;
+using TransitPay.API.Interfaces;
 
 namespace TransitPay.API.Services;
 
@@ -16,7 +17,7 @@ namespace TransitPay.API.Services;
 /// driver and the passenger see the identical receipt number for that
 /// transaction, and no two transactions ever share a TRN.
 /// </summary>
-public class TransactionReferenceNumberGenerator
+public class TransactionReferenceNumberGenerator : ITransactionReferenceNumberGenerator
 {
     private readonly TransitPayDbContext _dbContext;
 

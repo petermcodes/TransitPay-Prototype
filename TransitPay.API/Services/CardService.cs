@@ -104,7 +104,8 @@ public class CardService : ICardService
                 Status = CardStatus.ACTIVE,
                 IssueDate = DateTime.UtcNow,
                 ExpiryDate = DateTime.UtcNow.AddYears(1),
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }
             };
 
             _dbContext.Cards.Add(card);

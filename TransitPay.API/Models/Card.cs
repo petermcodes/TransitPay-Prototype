@@ -45,13 +45,13 @@ public class Card
 
     /// <summary>
     /// EF Core optimistic concurrency token.
-    /// Configured via the [Timestamp] attribute — automatically included in
+    /// Configured via the [ConcurrencyCheck] attribute — automatically included in
     /// UPDATE WHERE clauses to prevent lost updates. Not exposed in DTOs to
     /// preserve the exact legacy serialized response.
     /// </summary>
-    [Timestamp]
+    [ConcurrencyCheck]
     [Column("row_version")]
-    public byte[] RowVersion { get; set; } = [];
+    public byte[]? RowVersion { get; set; }
 
     public User? User { get; set; }
     public Wallet? Wallet { get; set; }
