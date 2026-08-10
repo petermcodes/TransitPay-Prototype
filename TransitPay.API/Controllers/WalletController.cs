@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Data;
 using TransitPay.API.Enums;
+using TransitPay.API.Interfaces;
 using TransitPay.API.Services;
 using TransitPay.API.Utilities;
 
@@ -15,9 +16,9 @@ namespace TransitPay.API.Controllers;
 public class WalletController : ControllerBase
 {
     private readonly TransitPayDbContext _dbContext;
-    private readonly TransactionReferenceNumberGenerator _trnGenerator;
+    private readonly ITransactionReferenceNumberGenerator _trnGenerator;
 
-    public WalletController(TransitPayDbContext dbContext, TransactionReferenceNumberGenerator trnGenerator)
+    public WalletController(TransitPayDbContext dbContext, ITransactionReferenceNumberGenerator trnGenerator)
     {
         _dbContext = dbContext;
         _trnGenerator = trnGenerator;

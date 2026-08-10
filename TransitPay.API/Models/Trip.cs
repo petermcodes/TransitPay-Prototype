@@ -105,9 +105,9 @@ public class Trip
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
-    [Timestamp]
+    [ConcurrencyCheck]
     [Column("row_version")]
-    public byte[] RowVersion { get; set; } = [];
+    public byte[]? RowVersion { get; set; }
 
     public User? Driver { get; set; }
     public Terminal? OriginTerminal { get; set; }

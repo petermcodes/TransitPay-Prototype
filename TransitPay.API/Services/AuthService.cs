@@ -124,7 +124,8 @@ public class AuthService : IAuthService
                 PassengerType = PassengerType.Passenger,
                 IssueDate = DateTime.UtcNow,
                 ExpiryDate = DateTime.UtcNow.AddYears(5), // Cards valid for 5 years
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }
             };
 
             _dbContext.Cards.Add(card);

@@ -1,15 +1,23 @@
 using Microsoft.EntityFrameworkCore;
 using TransitPay.API.Data;
+using TransitPay.API.Interfaces;
 
 namespace TransitPay.API.Services;
 
 /// <summary>
 /// Generates unique human-readable Transaction Reference Numbers (TRN).
 /// Format: TRN-YYYYMMDD-XXXXXX (e.g., TRN-20260804-000001).
-/// Generated inside the same DB transaction as the wallet deduction so failed
-/// attempts don't create gaps.
+/// 
+/// Uniqueness is guaranteed by an atomic counter table (trn_counters).
+/// Each call performs a single atomic INSERT ... ON CONFLICT ... RETURNING,
+/// so concurrent payments (different drivers/passengers) always receive
+/// distinct sequence numbers — no race condition.
+/// 
+/// The same TRN is stored on the single Transaction record, so both the
+/// driver and the passenger see the identical receipt number for that
+/// transaction, and no two transactions ever share a TRN.
 /// </summary>
-public class TransactionReferenceNumberGenerator
+public class TransactionReferenceNumberGenerator : ITransactionReferenceNumberGenerator
 {
     private readonly TransitPayDbContext _dbContext;
 
@@ -19,32 +27,30 @@ public class TransactionReferenceNumberGenerator
     }
 
     /// <summary>
-    /// Generates the next available TRN for today's date.
-    /// Format: TRN-YYYYMMDD-XXXXXX where XXXXXX is a six-digit zero-padded sequence.
+    /// Generates the next available TRN for today's date using an atomic
+    /// counter upsert. Format: TRN-YYYYMMDD-XXXXXX where XXXXXX is a
+    /// six-digit zero-padded sequence.
     /// </summary>
     public async Task<string> GenerateNextAsync()
     {
         var date = DateTime.UtcNow.ToString("yyyyMMdd");
         var prefix = $"TRN-{date}-";
 
-        // Find the highest existing sequence for today
-        var lastTrn = await _dbContext.Transactions
-            .Where(t => t.TransactionReferenceNumber != null &&
-                        t.TransactionReferenceNumber.StartsWith(prefix))
-            .OrderByDescending(t => t.TransactionReferenceNumber)
-            .Select(t => t.TransactionReferenceNumber)
-            .FirstOrDefaultAsync();
+        // Atomic upsert: insert a new counter row for today (UTC), or increment
+        // the existing one. RETURNING gives us the unique sequence number.
+        // This single statement is serialized by the DB, so concurrent calls
+        // always get distinct values. The UTC date aligns with the prefix date.
+        var sql = @"
+            INSERT INTO trn_counters (counter_date, last_sequence)
+            VALUES ((now() AT TIME ZONE 'UTC')::date, 1)
+            ON CONFLICT (counter_date)
+            DO UPDATE SET last_sequence = trn_counters.last_sequence + 1
+            RETURNING last_sequence;";
 
-        int nextSequence = 1;
-        if (!string.IsNullOrEmpty(lastTrn))
-        {
-            var lastPart = lastTrn[(lastTrn.Length - 6)..];
-            if (int.TryParse(lastPart, out var lastSeq))
-            {
-                nextSequence = lastSeq + 1;
-            }
-        }
+        var sequence = await _dbContext.Database
+            .SqlQueryRaw<int>(sql)
+            .SingleAsync();
 
-        return $"{prefix}{nextSequence:D6}";
+        return $"{prefix}{sequence:D6}";
     }
 }
