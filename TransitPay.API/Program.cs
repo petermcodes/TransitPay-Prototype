@@ -85,63 +85,84 @@ builder.Services.AddCors(options =>
 });
 
 // Build connection string - prioritize environment variables for production deployments
-// Railway/Render provide individual DATABASE_* environment variables
+// Railway provides DATABASE_URL, Render provides individual DATABASE_* variables
 // Local development uses appsettings.json with Npgsql format
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// Check for production environment variables FIRST (Railway/Render)
-var dbHost = Environment.GetEnvironmentVariable("DATABASE_HOST");
-var dbName = Environment.GetEnvironmentVariable("DATABASE_NAME");
+// Check for DATABASE_URL FIRST (Railway standard format)
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-if (!string.IsNullOrEmpty(dbHost) && !string.IsNullOrEmpty(dbName))
+if (!string.IsNullOrEmpty(databaseUrl))
 {
-    // Production deployment (Railway/Render) - use individual environment variables
-    var dbPort = Environment.GetEnvironmentVariable("DATABASE_PORT") ?? "5432";
-    var dbUser = Environment.GetEnvironmentVariable("DATABASE_USER")
-        ?? throw new InvalidOperationException("DATABASE_USER environment variable is not set");
-    var dbPass = Environment.GetEnvironmentVariable("DATABASE_PASSWORD")
-        ?? throw new InvalidOperationException("DATABASE_PASSWORD environment variable is not set");
-
-    connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPass};";
-    Console.WriteLine($"[STARTUP] Using DATABASE_* environment variables (password masked): Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password=***");
-}
-else if (!string.IsNullOrEmpty(connectionString))
-{
-    // Local development - use appsettings.json
-    Console.WriteLine($"[STARTUP] Using appsettings.json connection string");
-
-    // Render provides connection string in URL format (postgresql://...)
-    // Npgsql expects key-value format (Host=...;Port=...;Database=...)
-    // Convert if needed
-    if (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase))
+    // Railway provides DATABASE_URL - parse it
+    Console.WriteLine("[STARTUP] Found DATABASE_URL environment variable");
+    try
     {
-        Console.WriteLine("[STARTUP] Converting PostgreSQL URL to Npgsql connection string format");
-        try
-        {
-            var converted = ConvertDatabaseUrlToConnectionString(connectionString);
-            Console.WriteLine($"[STARTUP] Conversion successful: {converted.Replace(dbPassword, "***")}");
-            connectionString = converted;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[STARTUP] Conversion failed: {ex.Message}");
-            Console.WriteLine($"[STARTUP] Will attempt to use original connection string");
-        }
+        connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
+        Console.WriteLine($"[STARTUP] Parsed DATABASE_URL successfully (password masked): {connectionString.Replace(dbPassword, "***")}");
     }
-
-    // Only replace the placeholder in local development where DB_PASSWORD is used as a placeholder
-    if (connectionString.Contains("${DB_PASSWORD}"))
+    catch (Exception ex)
     {
-        connectionString = connectionString.Replace("${DB_PASSWORD}", dbPassword);
+        Console.WriteLine($"[STARTUP] Failed to parse DATABASE_URL: {ex.Message}");
+        throw;
     }
-
-    Console.WriteLine($"[STARTUP] Final connection string to be used (password masked): {connectionString.Replace(dbPassword, "***")}");
 }
+// Check for individual DATABASE_* variables (Render/other platforms)
 else
 {
-    throw new InvalidOperationException(
-        "No database configuration found. Either set DATABASE_HOST/DATABASE_NAME environment variables " +
-        "or configure DefaultConnection in appsettings.json.");
+    var dbHost = Environment.GetEnvironmentVariable("DATABASE_HOST");
+    var dbName = Environment.GetEnvironmentVariable("DATABASE_NAME");
+    
+    if (!string.IsNullOrEmpty(dbHost) && !string.IsNullOrEmpty(dbName))
+    {
+        // Production deployment with individual variables
+        var dbPort = Environment.GetEnvironmentVariable("DATABASE_PORT") ?? "5432";
+        var dbUser = Environment.GetEnvironmentVariable("DATABASE_USER")
+            ?? throw new InvalidOperationException("DATABASE_USER environment variable is not set");
+        var dbPass = Environment.GetEnvironmentVariable("DATABASE_PASSWORD")
+            ?? throw new InvalidOperationException("DATABASE_PASSWORD environment variable is not set");
+
+        connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPass};";
+        Console.WriteLine($"[STARTUP] Using DATABASE_* environment variables (password masked): Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password=***");
+    }
+    else if (!string.IsNullOrEmpty(connectionString))
+    {
+        // Local development - use appsettings.json
+        Console.WriteLine($"[STARTUP] Using appsettings.json connection string");
+
+        // Render provides connection string in URL format (postgresql://...)
+        // Npgsql expects key-value format (Host=...;Port=...;Database=...)
+        // Convert if needed
+        if (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("[STARTUP] Converting PostgreSQL URL to Npgsql connection string format");
+            try
+            {
+                var converted = ConvertDatabaseUrlToConnectionString(connectionString);
+                Console.WriteLine($"[STARTUP] Conversion successful: {converted.Replace(dbPassword, "***")}");
+                connectionString = converted;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[STARTUP] Conversion failed: {ex.Message}");
+                Console.WriteLine($"[STARTUP] Will attempt to use original connection string");
+            }
+        }
+
+        // Only replace the placeholder in local development where DB_PASSWORD is used as a placeholder
+        if (connectionString.Contains("${DB_PASSWORD}"))
+        {
+            connectionString = connectionString.Replace("${DB_PASSWORD}", dbPassword);
+        }
+
+        Console.WriteLine($"[STARTUP] Final connection string to be used (password masked): {connectionString.Replace(dbPassword, "***")}");
+    }
+    else
+    {
+        throw new InvalidOperationException(
+            "No database configuration found. Set DATABASE_URL or DATABASE_HOST/DATABASE_NAME environment variables, " +
+            "or configure DefaultConnection in appsettings.json.");
+    }
 }
 
 builder.Services.AddDbContext<TransitPayDbContext>(options =>

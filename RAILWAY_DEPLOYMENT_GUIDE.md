@@ -35,12 +35,9 @@ In your Railway project settings, add these environment variables:
 ### Required Variables
 
 ```env
-# Database (Railway provides these automatically when you link the database)
-DATABASE_HOST=${{Postgres.HOSTNAME}}
-DATABASE_PORT=${{Postgres.PORT}}
-DATABASE_NAME=${{Postgres.DATABASE}}
-DATABASE_USER=${{Postgres.USER}}
-DATABASE_PASSWORD=${{Postgres.PASSWORD}}
+# Database - Railway automatically provides DATABASE_URL when you link PostgreSQL
+# No need to manually add DATABASE_HOST, DATABASE_PORT, etc. - DATABASE_URL is sufficient
+# DATABASE_URL=postgresql://user:password@host:port/database (auto-provided by Railway)
 
 # JWT Configuration (generate a secure random string, at least 32 characters)
 # Use a strong random string like: openssl rand -base64 32
@@ -52,6 +49,8 @@ ADMIN_BOOTSTRAP_PASSWORD=your-secure-admin-password
 # Environment
 ASPNETCORE_ENVIRONMENT=Production
 ```
+
+**Note**: Railway automatically provides the `DATABASE_URL` environment variable when you link a PostgreSQL database. The app will automatically parse this URL and connect to your database. You do NOT need to manually configure individual `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, or `DATABASE_PASSWORD` variables.
 
 ### Optional Variables
 
@@ -67,7 +66,9 @@ RATE_LIMITING__AUTH__WINDOWMINUTES=1
 2. Click "Variables" tab
 3. Click "Add Variable" → "Reference"
 4. Select your PostgreSQL database
-5. Railway will automatically add the `DATABASE_*` variables
+5. Railway will automatically add the `DATABASE_URL` variable
+
+**Important**: The app prioritizes `DATABASE_URL` over individual `DATABASE_*` variables, so linking the database is sufficient.
 
 ## Step 6: Deploy
 
@@ -174,10 +175,11 @@ Railway provides:
 
 ## Connection String Behavior
 
-The application uses the following logic to determine the database connection string:
+The application uses the following logic to determine the database connection string (in priority order):
 
-1. **Production (Railway/Render)**: If `DATABASE_HOST` and `DATABASE_NAME` environment variables are present, the app builds the connection string from individual `DATABASE_*` variables
-2. **Local Development**: If no `DATABASE_HOST` is set, the app uses the `DefaultConnection` from `appsettings.json`
-3. **Error**: If neither is configured, the app fails to start with a clear error message
+1. **Railway (DATABASE_URL)**: If `DATABASE_URL` environment variable is present, the app parses it and builds the connection string. This is Railway's standard format.
+2. **Render/Other Platforms (Individual Variables)**: If `DATABASE_HOST` and `DATABASE_NAME` are present, the app builds the connection string from individual `DATABASE_*` variables
+3. **Local Development**: If no environment variables are set, the app uses the `DefaultConnection` from `appsettings.json`
+4. **Error**: If no configuration is found, the app fails to start with a clear error message
 
-This ensures that Railway deployments always use the correct database and never fall back to localhost.
+This ensures that Railway deployments always use the correct database via `DATABASE_URL` and never fall back to localhost.
