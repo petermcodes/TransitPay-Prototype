@@ -19,15 +19,22 @@ The following files have been created/updated:
 VITE_API_URL=https://transitpay-api-production.up.railway.app
 ```
 
+### ✅ Created: `admin-dashboard/Dockerfile`
+Multi-stage Docker build using Node 20 and nginx for production-ready deployment.
+
+### ✅ Created: `admin-dashboard/nginx.conf`
+Nginx configuration with SPA routing support, gzip compression, and security headers.
+
 ### ✅ Created: `admin-dashboard/railway.json`
 ```json
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "npm run preview",
+    "startCommand": "",
     "healthcheckPath": "/",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
@@ -40,7 +47,25 @@ Added admin dashboard CORS origin (will be updated with actual URL after deploym
 
 ---
 
-## Step 2: Deploy to Railway
+## Step 2: Fix Package Lock File (REQUIRED)
+
+**Before deploying, you must fix the package-lock.json sync issue locally:**
+
+```bash
+cd admin-dashboard
+npm install
+git add package-lock.json
+git commit -m "Fix package-lock.json sync"
+git push
+```
+
+**Why this is required:**
+- The Docker build uses `npm ci` which requires package.json and package-lock.json to be in sync
+- This ensures deterministic, reproducible builds
+
+---
+
+## Step 3: Deploy to Railway
 
 ### Option A: Deploy as New Service in Existing Project (Recommended)
 
@@ -52,8 +77,8 @@ Added admin dashboard CORS origin (will be updated with actual URL after deploym
 2. **Configure Service:**
    - **Service Name**: `admin-dashboard`
    - **Root Directory**: `admin-dashboard`
-   - **Build Command**: Leave empty (auto-detected by Nixpacks)
-   - **Start Command**: `npm run preview`
+   - **Build Command**: Leave empty (auto-detected from Dockerfile)
+   - **Start Command**: Leave empty (handled by Dockerfile)
 
 3. **Add Environment Variables:**
    
@@ -64,7 +89,7 @@ Added admin dashboard CORS origin (will be updated with actual URL after deploym
 
 4. **Deploy:**
    - Click **"Deploy"** button
-   - Wait for build to complete (2-3 minutes)
+   - Wait for build to complete (3-5 minutes for first Docker build)
    - Monitor the build logs for any errors
 
 ---
@@ -173,16 +198,38 @@ git push
 
 ## Troubleshooting
 
-### Build Fails
+### Build Fails - npm ci Error
+
+**Error: "npm ci can only install packages when your package.json and package-lock.json are in sync"**
+
+**Solution:**
+```bash
+cd admin-dashboard
+npm install
+git add package-lock.json
+git commit -m "Fix package-lock.json"
+git push
+```
+
+### Build Fails - Node.js Version Error
+
+**Error: "EBADENGINE Unsupported engine"**
+
+**Solution:** This is fixed by using Docker with Node 20. If you still see this error:
+- Verify Dockerfile is being used (check Railway build logs)
+- Ensure railway.json has `"builder": "DOCKERFILE"`
+
+### General Build Issues
 
 **Check build logs in Railway:**
-- Look for npm install errors
-- Verify Node.js version compatibility
-- Check for missing dependencies
+- Look for Docker build errors
+- Verify all files are committed to GitHub
+- Check that Dockerfile path is correct
 
 **Common issues:**
 - Missing `package-lock.json` → Run `npm install` locally and commit
 - Build script fails → Verify `npm run build` works locally
+- Docker build fails → Check Dockerfile syntax
 
 ### App Crashes on Load
 
@@ -275,9 +322,9 @@ After admin dashboard is deployed:
 | **Admin Dashboard URL** | `https://admin-dashboard-production.up.railway.app` |
 | **API URL** | `https://transitpay-api-production.up.railway.app` |
 | **Environment Variable** | `VITE_API_URL=https://transitpay-api-production.up.railway.app` |
-| **Build Command** | `npm run build` (auto) |
-| **Start Command** | `npm run preview` |
-| **Publish Directory** | `dist` |
+| **Build System** | Docker (Node 20 + nginx) |
+| **Dockerfile** | `admin-dashboard/Dockerfile` |
+| **Publish Directory** | `dist` (inside Docker) |
 
 ---
 
