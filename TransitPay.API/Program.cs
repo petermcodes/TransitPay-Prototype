@@ -21,6 +21,32 @@ var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD")
         "DB_PASSWORD environment variable is not set. " +
         "Set it before starting the application (e.g., set DB_PASSWORD=your-db-password).");
 
+// Helper method to convert Render's DATABASE_URL to Npgsql connection string format
+// Must be defined before use
+static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
+{
+    try
+    {
+        // Parse: postgresql://username:password@host:port/database
+        var uri = new Uri(databaseUrl);
+        var userInfo = uri.UserInfo.Split(':');
+        if (userInfo.Length != 2)
+        {
+            throw new FormatException($"Invalid DATABASE_URL format: {databaseUrl}");
+        }
+        
+        var username = userInfo[0];
+        var password = userInfo[1];
+        var database = uri.AbsolutePath.TrimStart('/');
+        
+        return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password};";
+    }
+    catch (Exception ex)
+    {
+        throw new InvalidOperationException($"Failed to parse DATABASE_URL: {databaseUrl}", ex);
+    }
+}
+
 // Add services
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -59,28 +85,20 @@ builder.Services.AddCors(options =>
 // postgresql://username:password@host:port/database
 // Npgsql expects: Host=host;Port=port;Database=database;Username=username;Password=password
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+Console.WriteLine($"[STARTUP] DATABASE_URL present: {!string.IsNullOrEmpty(databaseUrl)}");
+
 var connectionString = !string.IsNullOrEmpty(databaseUrl)
     ? ConvertDatabaseUrlToConnectionString(databaseUrl)
     : builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException(
             "Connection string 'DefaultConnection' is not configured in appsettings.json.");
 
+Console.WriteLine($"[STARTUP] Connection string (password masked): {connectionString.Replace(dbPassword, "***")}");
+
 // Only replace the placeholder in local development where DB_PASSWORD is used as a placeholder
 if (connectionString.Contains("${DB_PASSWORD}"))
 {
     connectionString = connectionString.Replace("${DB_PASSWORD}", dbPassword);
-}
-
-// Helper method to convert Render's DATABASE_URL to Npgsql connection string format
-static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
-{
-    // Parse: postgresql://username:password@host:port/database
-    var uri = new Uri(databaseUrl);
-    var username = uri.UserInfo.Split(':')[0];
-    var password = uri.UserInfo.Split(':')[1];
-    var database = uri.AbsolutePath.TrimStart('/');
-    
-    return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password}";
 }
 
 builder.Services.AddDbContext<TransitPayDbContext>(options =>
@@ -172,137 +190,137 @@ builder.Logging.AddSimpleConsole(options =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+Console.WriteLine("[STARTUP] Application built successfully");
+
+try
 {
-    var db = scope.ServiceProvider.GetRequiredService<TransitPayDbContext>();
-    
-    // Apply migrations only for relational providers (e.g., PostgreSQL).
-    // The InMemory provider used by integration tests does not support migrations.
-    if (db.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true)
+    using (var scope = app.Services.CreateScope())
     {
-        db.Database.Migrate();
-    }
-
-    // Seed roles - ensure all required roles exist
-    var passengerRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Passenger);
-    if (passengerRole == null)
-    {
-        passengerRole = new Role { RoleName = RoleName.Passenger };
-        db.Roles.Add(passengerRole);
-    }
-
-    var driverRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Driver);
-    if (driverRole == null)
-    {
-        driverRole = new Role { RoleName = RoleName.Driver };
-        db.Roles.Add(driverRole);
-    }
-
-    var adminRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Admin);
-    if (adminRole == null)
-    {
-        adminRole = new Role { RoleName = RoleName.Admin };
-        db.Roles.Add(adminRole);
-    }
-
-    db.SaveChanges();
-
-    // Seed terminals
-    if (!db.Terminals.Any())
-    {
-        var origin = new Terminal { TerminalName = "Central Terminal", IsActive = true, CreatedAt = DateTime.UtcNow };
-        var destination = new Terminal { TerminalName = "Airport Terminal", IsActive = true, CreatedAt = DateTime.UtcNow };
-        db.Terminals.AddRange(origin, destination);
-        db.SaveChanges();
-
-        // Seed fare rules for both directions
-        db.FareRules.AddRange(
-            new FareRule
+        var db = scope.ServiceProvider.GetRequiredService<TransitPayDbContext>();
+        Console.WriteLine("[STARTUP] DbContext resolved");
+        
+        // Apply migrations only for relational providers (e.g., PostgreSQL).
+        // The InMemory provider used by integration tests does not support migrations.
+        if (db.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            Console.WriteLine("[STARTUP] Applying migrations...");
+            try
             {
-                OriginTerminalId = origin.TerminalId,
-                DestinationTerminalId = destination.TerminalId,
-                VehicleType = VehicleType.BUS,
-                PassengerType = PassengerType.Passenger,
-                FareAmount = 12.50m,
-                EffectiveDate = DateTime.UtcNow.AddDays(-1),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            },
-            new FareRule
+                db.Database.Migrate();
+                Console.WriteLine("[STARTUP] Migrations applied successfully");
+            }
+            catch (Exception ex)
             {
-                OriginTerminalId = destination.TerminalId,
-                DestinationTerminalId = origin.TerminalId,
-                VehicleType = VehicleType.BUS,
-                PassengerType = PassengerType.Passenger,
-                FareAmount = 12.50m,
-                EffectiveDate = DateTime.UtcNow.AddDays(-1),
+                Console.WriteLine($"[STARTUP] Migration failed: {ex.Message}");
+                Console.WriteLine($"[STARTUP] Stack trace: {ex.StackTrace}");
+                throw;
+            }
+        }
+
+        // Seed roles - ensure all required roles exist
+        var passengerRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Passenger);
+        if (passengerRole == null)
+        {
+            passengerRole = new Role { RoleName = RoleName.Passenger };
+            db.Roles.Add(passengerRole);
+        }
+
+        var driverRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Driver);
+        if (driverRole == null)
+        {
+            driverRole = new Role { RoleName = RoleName.Driver };
+            db.Roles.Add(driverRole);
+        }
+
+        var adminRole = db.Roles.FirstOrDefault(r => r.RoleName == RoleName.Admin);
+        if (adminRole == null)
+        {
+            adminRole = new Role { RoleName = RoleName.Admin };
+            db.Roles.Add(adminRole);
+        }
+
+        db.SaveChanges();
+
+        // Seed terminals
+        if (!db.Terminals.Any())
+        {
+            var origin = new Terminal { TerminalName = "Central Terminal", IsActive = true, CreatedAt = DateTime.UtcNow };
+            var destination = new Terminal { TerminalName = "Airport Terminal", IsActive = true, CreatedAt = DateTime.UtcNow };
+            db.Terminals.AddRange(origin, destination);
+            db.SaveChanges();
+
+            // Seed fare rules for both directions
+            db.FareRules.AddRange(
+                new FareRule
+                {
+                    OriginTerminalId = origin.TerminalId,
+                    DestinationTerminalId = destination.TerminalId,
+                    VehicleType = VehicleType.BUS,
+                    PassengerType = PassengerType.Passenger,
+                    FareAmount = 12.50m,
+                    EffectiveDate = DateTime.UtcNow.AddDays(-1),
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new FareRule
+                {
+                    OriginTerminalId = destination.TerminalId,
+                    DestinationTerminalId = origin.TerminalId,
+                    VehicleType = VehicleType.BUS,
+                    PassengerType = PassengerType.Passenger,
+                    FareAmount = 12.50m,
+                    EffectiveDate = DateTime.UtcNow.AddDays(-1),
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            db.SaveChanges();
+        }
+
+        // Seed admin user via secure bootstrap initialization.
+        // The initial admin password comes from the ADMIN_BOOTSTRAP_PASSWORD environment variable.
+        // No hardcoded default credentials are ever used.
+        if (adminRole != null && !db.Users.Any(u => u.Username == "Admin"))
+        {
+            var bootstrapPassword = Environment.GetEnvironmentVariable("ADMIN_BOOTSTRAP_PASSWORD")
+                ?? throw new InvalidOperationException(
+                    "ADMIN_BOOTSTRAP_PASSWORD environment variable is not set. " +
+                    "Set it before starting the application to bootstrap the initial administrator account.");
+
+            var passwordHasher = scope.ServiceProvider.GetRequiredService<PasswordHasher<User>>();
+            var adminUser = new User
+            {
+                Username = "Admin",
+                FirstName = "System",
+                LastName = "Administrator",
+                MobileNumber = "0000000000",
+                PasswordHash = passwordHasher.HashPassword(null!, bootstrapPassword),
                 IsActive = true,
+                RoleId = adminRole.RoleId,
+                PasswordChangedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow
-            });
-        db.SaveChanges();
-    }
+            };
+            db.Users.Add(adminUser);
+            db.SaveChanges();
+        }
 
-    // Seed admin user via secure bootstrap initialization.
-    // The initial admin password comes from the ADMIN_BOOTSTRAP_PASSWORD environment variable.
-    // No hardcoded default credentials are ever used.
-    if (adminRole != null && !db.Users.Any(u => u.Username == "Admin"))
-    {
-        var bootstrapPassword = Environment.GetEnvironmentVariable("ADMIN_BOOTSTRAP_PASSWORD")
-            ?? throw new InvalidOperationException(
-                "ADMIN_BOOTSTRAP_PASSWORD environment variable is not set. " +
-                "Set it before starting the application to bootstrap the initial administrator account.");
-
-        var passwordHasher = scope.ServiceProvider.GetRequiredService<PasswordHasher<User>>();
-        var adminUser = new User
+        // Seed test card and wallet
+        if (!db.Cards.Any())
         {
-            Username = "Admin",
-            FirstName = "System",
-            LastName = "Administrator",
-            MobileNumber = "0000000000",
-            PasswordHash = passwordHasher.HashPassword(null!, bootstrapPassword),
-            IsActive = true,
-            RoleId = adminRole.RoleId,
-            PasswordChangedAt = DateTime.UtcNow,
-            CreatedAt = DateTime.UtcNow
-        };
-        db.Users.Add(adminUser);
-        db.SaveChanges();
-    }
+            var card = new Card
+            {
+                // Use a non-contiguous test card string in source to avoid embedding a raw PAN literal.
+                // The application and masking utilities only require the last four digits to be present for display.
+                CardNumber = "4111-1111-1111-1111",
+                Status = CardStatus.ACTIVE,
+                PassengerType = PassengerType.Passenger,
+                IssueDate = DateTime.UtcNow,
+                ExpiryDate = DateTime.UtcNow.AddYears(2),
+                CreatedAt = DateTime.UtcNow,
+                RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }
+            };
+            db.Cards.Add(card);
+            db.SaveChanges();
 
-    // Seed test card and wallet
-    if (!db.Cards.Any())
-    {
-        var card = new Card
-        {
-            // Use a non-contiguous test card string in source to avoid embedding a raw PAN literal.
-            // The application and masking utilities only require the last four digits to be present for display.
-            CardNumber = "4111-1111-1111-1111",
-            Status = CardStatus.ACTIVE,
-            PassengerType = PassengerType.Passenger,
-            IssueDate = DateTime.UtcNow,
-            ExpiryDate = DateTime.UtcNow.AddYears(2),
-            CreatedAt = DateTime.UtcNow,
-            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }
-        };
-        db.Cards.Add(card);
-        db.SaveChanges();
-
-        db.Wallets.Add(new Wallet
-        {
-            CardId = card.CardId,
-            Balance = 50.00m,
-            Status = CardStatus.ACTIVE,
-            CreatedAt = DateTime.UtcNow
-        });
-        db.SaveChanges();
-    }
-
-    // Auto-create wallets for cards without wallets
-    var cardsWithoutWallets = db.Cards.Where(c => !db.Wallets.Any(w => w.CardId == c.CardId)).ToList();
-    if (cardsWithoutWallets.Any())
-    {
-        foreach (var card in cardsWithoutWallets)
-        {
             db.Wallets.Add(new Wallet
             {
                 CardId = card.CardId,
@@ -310,28 +328,51 @@ using (var scope = app.Services.CreateScope())
                 Status = CardStatus.ACTIVE,
                 CreatedAt = DateTime.UtcNow
             });
+            db.SaveChanges();
         }
-        db.SaveChanges();
-    }
 
-    // Auto-generate QR codes for all cards that don't have one
-    var cardsWithoutQR = db.Cards.Where(c => !db.QRCodes.Any(q => q.CardId == c.CardId && q.IsActive)).ToList();
-    if (cardsWithoutQR.Any())
-    {
-        var qrService = scope.ServiceProvider.GetRequiredService<IQRService>();
-        foreach (var card in cardsWithoutQR)
+        // Auto-create wallets for cards without wallets
+        var cardsWithoutWallets = db.Cards.Where(c => !db.Wallets.Any(w => w.CardId == c.CardId)).ToList();
+        if (cardsWithoutWallets.Any())
         {
-            try
+            foreach (var card in cardsWithoutWallets)
             {
-                await qrService.GenerateOrRetrieveQRAsync(card.CardId);
+                db.Wallets.Add(new Wallet
+                {
+                    CardId = card.CardId,
+                    Balance = 50.00m,
+                    Status = CardStatus.ACTIVE,
+                    CreatedAt = DateTime.UtcNow
+                });
             }
-            catch (Exception ex)
+            db.SaveChanges();
+        }
+
+        // Auto-generate QR codes for all cards that don't have one
+        var cardsWithoutQR = db.Cards.Where(c => !db.QRCodes.Any(q => q.CardId == c.CardId && q.IsActive)).ToList();
+        if (cardsWithoutQR.Any())
+        {
+            var qrService = scope.ServiceProvider.GetRequiredService<IQRService>();
+            foreach (var card in cardsWithoutQR)
             {
-                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-                logger.LogWarning(ex, "Failed to generate QR for card {CardId}", card.CardId);
+                try
+                {
+                    await qrService.GenerateOrRetrieveQRAsync(card.CardId);
+                }
+                catch (Exception ex)
+                {
+                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                    logger.LogWarning(ex, "Failed to generate QR for card {CardId}", card.CardId);
+                }
             }
         }
-    }
+    } // Close using block
+} // Close try block
+catch (Exception ex)
+{
+    Console.WriteLine($"[STARTUP] Seeding failed: {ex.Message}");
+    Console.WriteLine($"[STARTUP] Stack trace: {ex.StackTrace}");
+    throw;
 }
 
 // Configure middleware
