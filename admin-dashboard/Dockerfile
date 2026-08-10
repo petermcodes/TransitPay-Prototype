@@ -14,24 +14,24 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Stage 2: Serve with nginx (production)
-FROM nginx:alpine
+# Stage 2: Serve with serve package (production)
+FROM node:20-alpine
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+# Install serve globally
+RUN npm install -g serve
 
 # Copy built files from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /app/dist
 
-# Copy minimal nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Set working directory
+WORKDIR /app
 
 # Expose port 80
 EXPOSE 80
 
-# Healthcheck with increased tolerance for slow starts
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=10 \
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/ || exit 1
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start serve
+CMD ["serve", "-s", "dist", "-l", "80"]
