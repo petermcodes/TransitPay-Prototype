@@ -12,10 +12,10 @@ services:
         generateValue: true
       - key: ADMIN_BOOTSTRAP_PASSWORD
         generateValue: true
-      - key: ConnectionStrings__DefaultConnection
+      - key: DATABASE_URL
         fromDatabase:
           name: transitpay-db
-          property: connectionString
+          property: externalDatabaseUrl
       - key: DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE
         value: "false"
     healthCheckPath: /api/auth/validate
