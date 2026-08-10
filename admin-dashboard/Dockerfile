@@ -33,5 +33,5 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/ || exit 1
 
-# Start serve
-CMD ["serve", "-s", "dist", "-l", "80"]
+# Start serve - listen on all interfaces (0.0.0.0) for Railway health checks
+CMD ["serve", "-s", "dist", "-l", "80", "--host", "0.0.0.0"]
