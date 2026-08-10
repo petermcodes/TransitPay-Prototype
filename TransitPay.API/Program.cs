@@ -84,17 +84,12 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Render provides the database connection via DATABASE_URL environment variable in format:
-// postgresql://username:password@host:port/database
-// Npgsql expects: Host=host;Port=port;Database=database;Username=username;Password=password
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-Console.WriteLine($"[STARTUP] DATABASE_URL present: {!string.IsNullOrEmpty(databaseUrl)}");
-
-var connectionString = !string.IsNullOrEmpty(databaseUrl)
-    ? ConvertDatabaseUrlToConnectionString(databaseUrl)
-    : builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException(
-            "Connection string 'DefaultConnection' is not configured in appsettings.json.");
+// Get connection string from configuration
+// Render provides it via ConnectionStrings__DefaultConnection environment variable
+// Local development uses appsettings.json with DB_PASSWORD placeholder
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException(
+        "Connection string 'DefaultConnection' is not configured in appsettings.json.");
 
 Console.WriteLine($"[STARTUP] Connection string (password masked): {connectionString.Replace(dbPassword, "***")}");
 
