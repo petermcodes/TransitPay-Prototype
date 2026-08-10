@@ -85,13 +85,25 @@ builder.Services.AddCors(options =>
 });
 
 // Get connection string from configuration
-// Render provides it via ConnectionStrings__DefaultConnection environment variable
-// Local development uses appsettings.json with DB_PASSWORD placeholder
+// Render provides it via ConnectionStrings__DefaultConnection environment variable in URL format:
+// postgresql://username:password@host:port/database
+// Local development uses appsettings.json with Npgsql format:
+// Host=...;Port=...;Database=...;Username=...;Password=...
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
         "Connection string 'DefaultConnection' is not configured in appsettings.json.");
 
-Console.WriteLine($"[STARTUP] Connection string (password masked): {connectionString.Replace(dbPassword, "***")}");
+Console.WriteLine($"[STARTUP] Connection string (raw): {connectionString}");
+
+// Render provides connection string in URL format (postgresql://...)
+// Npgsql expects key-value format (Host=...;Port=...;Database=...)
+// Convert if needed
+if (connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+{
+    Console.WriteLine("[STARTUP] Converting PostgreSQL URL to connection string format");
+    connectionString = ConvertDatabaseUrlToConnectionString(connectionString);
+    Console.WriteLine($"[STARTUP] Converted connection string (password masked): {connectionString.Replace(dbPassword, "***")}");
+}
 
 // Only replace the placeholder in local development where DB_PASSWORD is used as a placeholder
 if (connectionString.Contains("${DB_PASSWORD}"))
