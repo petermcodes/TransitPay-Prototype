@@ -20,14 +20,14 @@ FROM node:20-alpine
 # Install serve globally
 RUN npm install -g serve
 
-# Copy built files from builder stage
-COPY --from=builder /app/dist ./dist
-
 # Set working directory
 WORKDIR /app
 
-# Expose the port Railway will assign (for documentation)
-EXPOSE 80
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
 
-# Start serve - use Railway's PORT environment variable
-CMD ["sh", "-c", "serve -s dist -l ${PORT}"]
+# DEBUG: Verify file structure in the image
+RUN ls -la /app/dist && echo "--- index.html ---" && ls -la /app/dist/index.html
+
+# Start serve with full path and Railway's PORT environment variable
+CMD ["sh", "-c", "serve -s /app/dist -l ${PORT}"]
