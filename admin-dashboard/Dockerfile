@@ -17,8 +17,8 @@ RUN npm run build
 # Stage 2: Serve with serve package (production)
 FROM node:20-alpine
 
-# Install serve globally
-RUN npm install -g serve
+# Install curl for healthcheck and serve globally
+RUN apk add --no-cache curl && npm install -g serve
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist /app/dist
