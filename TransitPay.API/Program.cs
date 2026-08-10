@@ -15,11 +15,9 @@ using TransitPay.API.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Resolve secrets from environment variables ONLY — no hardcoded fallbacks.
-// Fail fast at startup if required secrets are missing.
-var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD")
-    ?? throw new InvalidOperationException(
-        "DB_PASSWORD environment variable is not set. " +
-        "Set it before starting the application (e.g., set DB_PASSWORD=your-db-password).");
+// DB_PASSWORD is only required for local development (appsettings.json placeholder replacement)
+// Production deployments using DATABASE_URL don't need DB_PASSWORD
+var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
 
 // Helper method to convert Render's DATABASE_URL to Npgsql connection string format
 // Must be defined before use
@@ -89,21 +87,28 @@ builder.Services.AddCors(options =>
 // Local development uses appsettings.json with Npgsql format
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// Check for DATABASE_URL FIRST (Railway standard format)
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+// Check for DATABASE_URL or POSTGRES_URL FIRST (Railway standard format)
+// Railway may provide either DATABASE_URL or POSTGRES_URL depending on configuration
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL") 
+               ?? Environment.GetEnvironmentVariable("POSTGRES_URL");
+
+Console.WriteLine($"[STARTUP] DATABASE_URL present: {!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_URL"))}");
+Console.WriteLine($"[STARTUP] POSTGRES_URL present: {!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("POSTGRES_URL"))}");
+Console.WriteLine($"[STARTUP] DATABASE_HOST present: {!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_HOST"))}");
+Console.WriteLine($"[STARTUP] DATABASE_NAME present: {!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_NAME"))}");
 
 if (!string.IsNullOrEmpty(databaseUrl))
 {
-    // Railway provides DATABASE_URL - parse it
-    Console.WriteLine("[STARTUP] Found DATABASE_URL environment variable");
+    // Railway provides DATABASE_URL or POSTGRES_URL - parse it
+    Console.WriteLine("[STARTUP] Found database URL environment variable");
     try
     {
         connectionString = ConvertDatabaseUrlToConnectionString(databaseUrl);
-        Console.WriteLine($"[STARTUP] Parsed DATABASE_URL successfully (password masked): {connectionString.Replace(dbPassword, "***")}");
+        Console.WriteLine($"[STARTUP] Parsed database URL successfully (password masked): {connectionString.Replace(dbPassword ?? "", "***")}");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[STARTUP] Failed to parse DATABASE_URL: {ex.Message}");
+        Console.WriteLine($"[STARTUP] Failed to parse database URL: {ex.Message}");
         throw;
     }
 }
@@ -150,18 +155,18 @@ else
         }
 
         // Only replace the placeholder in local development where DB_PASSWORD is used as a placeholder
-        if (connectionString.Contains("${DB_PASSWORD}"))
+        if (connectionString.Contains("${DB_PASSWORD}") && dbPassword != null)
         {
             connectionString = connectionString.Replace("${DB_PASSWORD}", dbPassword);
         }
 
-        Console.WriteLine($"[STARTUP] Final connection string to be used (password masked): {connectionString.Replace(dbPassword, "***")}");
+        Console.WriteLine($"[STARTUP] Final connection string to be used (password masked): {connectionString.Replace(dbPassword ?? "", "***")}");
     }
     else
     {
         throw new InvalidOperationException(
-            "No database configuration found. Set DATABASE_URL or DATABASE_HOST/DATABASE_NAME environment variables, " +
-            "or configure DefaultConnection in appsettings.json.");
+            "No database configuration found. Set DATABASE_URL or POSTGRES_URL environment variables, " +
+            "or set DATABASE_HOST/DATABASE_NAME, or configure DefaultConnection in appsettings.json.");
     }
 }
 
