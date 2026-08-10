@@ -166,7 +166,18 @@ Railway provides:
 ## Important Notes
 
 - **Port Configuration**: The Dockerfile has been updated to expose port 8080 (Railway's default)
+- **Database Connection**: The app now prioritizes `DATABASE_*` environment variables over `appsettings.json` to ensure production deployments always connect to the correct database
 - **Database Migrations**: The app automatically applies migrations on startup
 - **Data Seeding**: Initial data (roles, terminals, admin user, test card) is automatically seeded
 - **Health Checks**: Monitor the `/health` endpoint to verify database connectivity
 - **Logs**: Check Railway logs for detailed startup information and any errors
+
+## Connection String Behavior
+
+The application uses the following logic to determine the database connection string:
+
+1. **Production (Railway/Render)**: If `DATABASE_HOST` and `DATABASE_NAME` environment variables are present, the app builds the connection string from individual `DATABASE_*` variables
+2. **Local Development**: If no `DATABASE_HOST` is set, the app uses the `DefaultConnection` from `appsettings.json`
+3. **Error**: If neither is configured, the app fails to start with a clear error message
+
+This ensures that Railway deployments always use the correct database and never fall back to localhost.
