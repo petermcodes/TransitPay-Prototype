@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: transitpay-api
+    runtime: docker
+    plan: free  # Use 'starter' for production ($7/month)
+    dockerfilePath: ./TransitPay.API/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: DB_PASSWORD
+        generateValue: true
+      - key: JWT_KEY
+        generateValue: true
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        generateValue: true
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: transitpay-db
+          property: connectionString
+    healthCheckPath: /api/auth/validate
+    autoDeploy: true
+
+databases:
+  - name: transitpay-db
+    plan: free  # Use 'shared' for production ($7/month)
+    databaseName: transitpay
+    user: transitpay_user
