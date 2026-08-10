@@ -23,8 +23,8 @@ RUN apk add --no-cache curl
 # Copy built files from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Use default nginx configuration (custom config will be added after verification)
-RUN rm /etc/nginx/conf.d/default.conf
+# Copy minimal nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port 80
 EXPOSE 80
