@@ -84,30 +84,31 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Build connection string from environment variables
-// Render provides individual database properties via environment variables
+// Build connection string - prioritize environment variables for production deployments
+// Railway/Render provide individual DATABASE_* environment variables
 // Local development uses appsettings.json with Npgsql format
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-if (string.IsNullOrEmpty(connectionString))
+// Check for production environment variables FIRST (Railway/Render)
+var dbHost = Environment.GetEnvironmentVariable("DATABASE_HOST");
+var dbName = Environment.GetEnvironmentVariable("DATABASE_NAME");
+
+if (!string.IsNullOrEmpty(dbHost) && !string.IsNullOrEmpty(dbName))
 {
-    // Build connection string from individual environment variables (Render deployment)
-    var dbHost = Environment.GetEnvironmentVariable("DATABASE_HOST")
-        ?? throw new InvalidOperationException("DATABASE_HOST environment variable is not set");
+    // Production deployment (Railway/Render) - use individual environment variables
     var dbPort = Environment.GetEnvironmentVariable("DATABASE_PORT") ?? "5432";
-    var dbName = Environment.GetEnvironmentVariable("DATABASE_NAME")
-        ?? throw new InvalidOperationException("DATABASE_NAME environment variable is not set");
     var dbUser = Environment.GetEnvironmentVariable("DATABASE_USER")
         ?? throw new InvalidOperationException("DATABASE_USER environment variable is not set");
     var dbPass = Environment.GetEnvironmentVariable("DATABASE_PASSWORD")
         ?? throw new InvalidOperationException("DATABASE_PASSWORD environment variable is not set");
 
     connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPass};";
-    Console.WriteLine($"[STARTUP] Built connection string from environment variables (password masked): Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password=***");
+    Console.WriteLine($"[STARTUP] Using DATABASE_* environment variables (password masked): Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password=***");
 }
-else
+else if (!string.IsNullOrEmpty(connectionString))
 {
-    Console.WriteLine($"[STARTUP] Connection string from configuration (raw): {connectionString}");
+    // Local development - use appsettings.json
+    Console.WriteLine($"[STARTUP] Using appsettings.json connection string");
 
     // Render provides connection string in URL format (postgresql://...)
     // Npgsql expects key-value format (Host=...;Port=...;Database=...)
@@ -135,6 +136,12 @@ else
     }
 
     Console.WriteLine($"[STARTUP] Final connection string to be used (password masked): {connectionString.Replace(dbPassword, "***")}");
+}
+else
+{
+    throw new InvalidOperationException(
+        "No database configuration found. Either set DATABASE_HOST/DATABASE_NAME environment variables " +
+        "or configure DefaultConnection in appsettings.json.");
 }
 
 builder.Services.AddDbContext<TransitPayDbContext>(options =>
