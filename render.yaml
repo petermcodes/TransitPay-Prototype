@@ -16,6 +16,8 @@ services:
         fromDatabase:
           name: transitpay-db
           property: connectionString
+      - key: DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE
+        value: "false"
     healthCheckPath: /api/auth/validate
     autoDeploy: true
 
