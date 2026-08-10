@@ -43,6 +43,7 @@ DATABASE_USER=${{Postgres.USER}}
 DATABASE_PASSWORD=${{Postgres.PASSWORD}}
 
 # JWT Configuration (generate a secure random string, at least 32 characters)
+# Use a strong random string like: openssl rand -base64 32
 JWT_KEY=your-secure-jwt-key-at-least-32-chars-long
 
 # Admin Bootstrap Password (set a strong password for the initial admin account)
@@ -55,8 +56,8 @@ ASPNETCORE_ENVIRONMENT=Production
 ### Optional Variables
 
 ```env
-# Rate Limiting (defaults shown)
-RATE_LIMITING__AUTH__PERMITLIMIT=5
+# Rate Limiting (defaults shown - adjust as needed)
+RATE_LIMITING__AUTH__PERMITLIMIT=10
 RATE_LIMITING__AUTH__WINDOWMINUTES=1
 ```
 
@@ -85,6 +86,19 @@ curl https://your-app.up.railway.app/health
 # Expected response:
 # {"status":"healthy"}
 ```
+
+### Post-Deployment Configuration
+
+After successful deployment:
+
+1. **Update CORS settings** in `appsettings.json` to include your Railway domain:
+   - Add your Railway URL (e.g., `https://your-app.up.railway.app`) to the `Cors:AllowedOrigins` array
+   - Commit and push the changes
+
+2. **Test the API**:
+   - Health endpoint: `https://your-app.up.railway.app/health`
+   - Swagger UI: `https://your-app.up.railway.app/swagger`
+   - Login with admin credentials (username: `Admin`, password: your `ADMIN_BOOTSTRAP_PASSWORD`)
 
 ## Step 8: Get Admin Credentials
 
@@ -145,5 +159,14 @@ Railway provides:
 | Configuration | `railway.json` | `render.yaml` |
 | Database linking | Automatic via UI | Manual env vars |
 | Build system | Railpack | Docker |
+| Default port | 8080 | 10000 |
 | Free tier | $5 credit/month | Free tier available |
 | HTTPS | Automatic | Automatic |
+
+## Important Notes
+
+- **Port Configuration**: The Dockerfile has been updated to expose port 8080 (Railway's default)
+- **Database Migrations**: The app automatically applies migrations on startup
+- **Data Seeding**: Initial data (roles, terminals, admin user, test card) is automatically seeded
+- **Health Checks**: Monitor the `/health` endpoint to verify database connectivity
+- **Logs**: Check Railway logs for detailed startup information and any errors
