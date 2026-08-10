@@ -17,8 +17,8 @@ WORKDIR /app
 # Copy the published app from the build stage
 COPY --from=build /app/publish .
 
-# Expose the port Render expects
-EXPOSE 10000
+# Expose the port Railway expects
+EXPOSE 8080
 
 # Set the entry point
 ENTRYPOINT ["dotnet", "TransitPay.API.dll"]
