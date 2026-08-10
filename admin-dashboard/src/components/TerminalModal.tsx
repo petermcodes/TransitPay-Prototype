@@ -32,7 +32,8 @@ export function TerminalModal({ isOpen, onClose, onSubmit, terminals, loading = 
       newErrors.terminalName = 'Terminal name is required'
     }
 
-    if (!terminalId) {
+    // Only require terminalId when editing
+    if (initialData && !terminalId) {
       newErrors.terminalId = 'Please select a terminal'
     }
 
@@ -56,24 +57,27 @@ export function TerminalModal({ isOpen, onClose, onSubmit, terminals, loading = 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={initialData ? 'Edit Terminal' : 'Add New Terminal'} size="md">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-2">
-            Terminal <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={terminalId}
-            onChange={e => setTerminalId(Number(e.target.value))}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
-          >
-            <option value="">Select a terminal</option>
-            {terminals.map(terminal => (
-              <option key={terminal.terminalId} value={terminal.terminalId}>
-                {terminal.terminalName}
-              </option>
-            ))}
-          </select>
-          {errors.terminalId && <p className="text-red-500 text-xs mt-1">{errors.terminalId}</p>}
-        </div>
+        {/* Only show terminal selector when editing */}
+        {initialData && (
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Terminal <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={terminalId}
+              onChange={e => setTerminalId(Number(e.target.value))}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+            >
+              <option value="">Select a terminal</option>
+              {terminals.map(terminal => (
+                <option key={terminal.terminalId} value={terminal.terminalId}>
+                  {terminal.terminalName}
+                </option>
+              ))}
+            </select>
+            {errors.terminalId && <p className="text-red-500 text-xs mt-1">{errors.terminalId}</p>}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-semibold text-slate-700 mb-2">
