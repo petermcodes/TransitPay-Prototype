@@ -17,21 +17,17 @@ RUN npm run build
 # Stage 2: Serve with serve package (production)
 FROM node:20-alpine
 
-# Install curl for healthcheck and serve globally
-RUN apk add --no-cache curl && npm install -g serve
+# Install serve globally
+RUN npm install -g serve
 
 # Copy built files from builder stage
-COPY --from=builder /app/dist /app/dist
+COPY --from=builder /app/dist ./dist
 
 # Set working directory
 WORKDIR /app
 
-# Expose port 80
+# Expose the port Railway will assign (for documentation)
 EXPOSE 80
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost/ || exit 1
-
-# Start serve - listen on all interfaces (0.0.0.0) for Railway health checks
-CMD ["serve", "-s", "dist", "-l", "80", "--host", "0.0.0.0"]
+# Start serve - use Railway's PORT environment variable
+CMD ["sh", "-c", "serve -s dist -l ${PORT}"]
