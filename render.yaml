@@ -12,7 +12,7 @@ services:
         generateValue: true
       - key: ADMIN_BOOTSTRAP_PASSWORD
         generateValue: true
-      - key: DATABASE_URL
+      - key: ConnectionStrings__DefaultConnection
         fromDatabase:
           name: transitpay-db
           property: connectionString
