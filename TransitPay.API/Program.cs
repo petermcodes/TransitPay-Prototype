@@ -39,7 +39,10 @@ static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
         var password = userInfo[1];
         var database = uri.AbsolutePath.TrimStart('/');
         
-        return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password};";
+        // Uri.Port returns -1 if no port is specified, default to 5432 for PostgreSQL
+        var port = uri.Port == -1 ? 5432 : uri.Port;
+        
+        return $"Host={uri.Host};Port={port};Database={database};Username={username};Password={password};";
     }
     catch (Exception ex)
     {
@@ -187,6 +190,48 @@ builder.Logging.AddSimpleConsole(options =>
     options.SingleLine = true;
     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
 });
+
+// Disable file watching in production to avoid inotify limits on Render
+// File changes are not expected in production deployments
+if (!builder.Environment.IsDevelopment())
+{
+    Console.WriteLine("[STARTUP] Disabling file watching for production");
+    builder.Host.ConfigureAppConfiguration((hostingContext, config) =>
+    {
+        // Remove all configuration sources that watch for file changes
+        // and replace them with non-watching versions
+        var sources = config.Sources.ToList();
+        config.Sources.Clear();
+        
+        foreach (var source in sources)
+        {
+            if (source is Microsoft.Extensions.Configuration.Json.JsonConfigurationSource jsonSource)
+            {
+                // Create a new JSON source without file watching
+                var newSource = new Microsoft.Extensions.Configuration.Json.JsonConfigurationSource
+                {
+                    Path = jsonSource.Path,
+                    Optional = jsonSource.Optional,
+                    ReloadOnChange = false // Disable file watching
+                };
+                config.Add(newSource);
+            }
+            else if (source is Microsoft.Extensions.Configuration.EnvironmentVariables.EnvironmentVariablesConfigurationSource envSource)
+            {
+                config.Add(envSource);
+            }
+            else if (source is Microsoft.Extensions.Configuration.CommandLine.CommandLineConfigurationSource cmdSource)
+            {
+                config.Add(cmdSource);
+            }
+            else
+            {
+                // For other sources, add them back as-is
+                config.Add(source);
+            }
+        }
+    });
+}
 
 var app = builder.Build();
 
