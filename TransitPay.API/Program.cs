@@ -55,10 +55,33 @@ builder.Services.AddCors(options =>
     });
 });
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?.Replace("${DB_PASSWORD}", dbPassword)
-    ?? throw new InvalidOperationException(
-        "Connection string 'DefaultConnection' is not configured in appsettings.json.");
+// Render provides the database connection via DATABASE_URL environment variable in format:
+// postgresql://username:password@host:port/database
+// Npgsql expects: Host=host;Port=port;Database=database;Username=username;Password=password
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+var connectionString = !string.IsNullOrEmpty(databaseUrl)
+    ? ConvertDatabaseUrlToConnectionString(databaseUrl)
+    : builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException(
+            "Connection string 'DefaultConnection' is not configured in appsettings.json.");
+
+// Only replace the placeholder in local development where DB_PASSWORD is used as a placeholder
+if (connectionString.Contains("${DB_PASSWORD}"))
+{
+    connectionString = connectionString.Replace("${DB_PASSWORD}", dbPassword);
+}
+
+// Helper method to convert Render's DATABASE_URL to Npgsql connection string format
+static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
+{
+    // Parse: postgresql://username:password@host:port/database
+    var uri = new Uri(databaseUrl);
+    var username = uri.UserInfo.Split(':')[0];
+    var password = uri.UserInfo.Split(':')[1];
+    var database = uri.AbsolutePath.TrimStart('/');
+    
+    return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password}";
+}
 
 builder.Services.AddDbContext<TransitPayDbContext>(options =>
     options.UseNpgsql(connectionString)
