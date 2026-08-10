@@ -41,17 +41,11 @@ Ensure these files are committed to your repository:
 
 3. **Configure the Web Service**
    - **Name:** `transitpay-api`
-   - **Runtime:** `Dotnet`
+   - **Runtime:** `Docker` (important - uses the Dockerfile for .NET 10.0)
    - **Region:** Choose the closest region to your users (e.g., `Singapore` for Philippines)
    - **Branch:** `main` (or your default branch)
-   - **Build Command:**
-     ```bash
-     dotnet publish TransitPay.API/TransitPay.API.csproj -c Release -o ./publish
-     ```
-   - **Start Command:**
-     ```bash
-     dotnet TransitPay.API.dll
-     ```
+   - **Dockerfile Path:** `./TransitPay.API/Dockerfile`
+   - **Docker Context:** `.` (root of repository)
    - **Plan:** 
      - Select `Free` for testing (spins down after 15 min inactivity)
      - Select `Starter` ($7/month) for production (always on)
@@ -70,7 +64,7 @@ Ensure these files are committed to your repository:
 
 5. **Create the Web Service**
    - Click **"Create Web Service"**
-   - Render will start building your app (takes 2-3 minutes)
+   - Render will start building your Docker image (takes 3-5 minutes)
 
 ### Option B: Using render.yaml (Automatic)
 

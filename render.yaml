@@ -1,10 +1,10 @@
 services:
   - type: web
     name: transitpay-api
-    runtime: dotnet
+    runtime: docker
     plan: free  # Use 'starter' for production ($7/month)
-    buildCommand: dotnet publish TransitPay.API/TransitPay.API.csproj -c Release -o ./publish
-    startCommand: dotnet TransitPay.API.dll
+    dockerfilePath: ./TransitPay.API/Dockerfile
+    dockerContext: .
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
