@@ -36,7 +36,7 @@ In your Railway project settings, add these environment variables:
 
 ```env
 # Database - Railway automatically provides DATABASE_URL when you link PostgreSQL
-# No need to manually add DATABASE_HOST, DATABASE_PORT, etc. - DATABASE_URL is sufficient
+# The app will automatically detect and parse this URL
 # DATABASE_URL=postgresql://user:password@host:port/database (auto-provided by Railway)
 
 # JWT Configuration (generate a secure random string, at least 32 characters)
@@ -50,7 +50,12 @@ ADMIN_BOOTSTRAP_PASSWORD=your-secure-admin-password
 ASPNETCORE_ENVIRONMENT=Production
 ```
 
-**Note**: Railway automatically provides the `DATABASE_URL` environment variable when you link a PostgreSQL database. The app will automatically parse this URL and connect to your database. You do NOT need to manually configure individual `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, or `DATABASE_PASSWORD` variables.
+**Important Notes**:
+- Railway automatically provides the `DATABASE_URL` environment variable when you link a PostgreSQL database
+- The app will automatically detect and parse this URL to connect to your database
+- You do NOT need to manually configure individual `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, or `DATABASE_PASSWORD` variables
+- The app also supports `POSTGRES_URL` as an alternative to `DATABASE_URL`
+- `DB_PASSWORD` is NOT required in production (only used for local development)
 
 ### Optional Variables
 
@@ -62,13 +67,28 @@ RATE_LIMITING__AUTH__WINDOWMINUTES=1
 
 ## Step 5: Link Database to Service
 
+**This step is CRITICAL - the database must be linked to your service for the app to connect to it.**
+
 1. Go to your service (the web service)
 2. Click "Variables" tab
 3. Click "Add Variable" → "Reference"
 4. Select your PostgreSQL database
 5. Railway will automatically add the `DATABASE_URL` variable
 
-**Important**: The app prioritizes `DATABASE_URL` over individual `DATABASE_*` variables, so linking the database is sufficient.
+**Important**: 
+- The app prioritizes `DATABASE_URL` over individual `DATABASE_*` variables, so linking the database is sufficient
+- After linking, verify in the Variables tab that `DATABASE_URL` appears
+- If `DATABASE_URL` is not present after linking, try restarting your service
+- The app logs will show which environment variables are detected on startup
+
+**Verification**: After deployment, check the logs for these messages:
+```
+[STARTUP] DATABASE_URL present: True
+[STARTUP] Found database URL environment variable
+[STARTUP] Parsed database URL successfully (password masked): Host=...
+```
+
+If you see `DATABASE_URL present: False`, the database is not properly linked.
 
 ## Step 6: Deploy
 
