@@ -98,11 +98,20 @@ Console.WriteLine($"[STARTUP] Connection string (raw): {connectionString}");
 // Render provides connection string in URL format (postgresql://...)
 // Npgsql expects key-value format (Host=...;Port=...;Database=...)
 // Convert if needed
-if (connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+if (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase))
 {
-    Console.WriteLine("[STARTUP] Converting PostgreSQL URL to connection string format");
-    connectionString = ConvertDatabaseUrlToConnectionString(connectionString);
-    Console.WriteLine($"[STARTUP] Converted connection string (password masked): {connectionString.Replace(dbPassword, "***")}");
+    Console.WriteLine("[STARTUP] Converting PostgreSQL URL to Npgsql connection string format");
+    try
+    {
+        var converted = ConvertDatabaseUrlToConnectionString(connectionString);
+        Console.WriteLine($"[STARTUP] Conversion successful: {converted.Replace(dbPassword, "***")}");
+        connectionString = converted;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[STARTUP] Conversion failed: {ex.Message}");
+        Console.WriteLine($"[STARTUP] Will attempt to use original connection string");
+    }
 }
 
 // Only replace the placeholder in local development where DB_PASSWORD is used as a placeholder
@@ -110,6 +119,9 @@ if (connectionString.Contains("${DB_PASSWORD}"))
 {
     connectionString = connectionString.Replace("${DB_PASSWORD}", dbPassword);
 }
+
+// Final validation
+Console.WriteLine($"[STARTUP] Final connection string to be used (password masked): {connectionString.Replace(dbPassword, "***")}");
 
 builder.Services.AddDbContext<TransitPayDbContext>(options =>
     options.UseNpgsql(connectionString)
