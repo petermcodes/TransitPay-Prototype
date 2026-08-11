@@ -92,8 +92,8 @@ public class WalletController : ControllerBase
             TransactionReferenceNumber = trn,
             RemainingBalance = wallet.Balance,
             PaymentMode = request.PaymentMode ?? "Admin",
-            RegularFare = request.Amount,
-            FinalFare = request.Amount,
+            RegularFare = 0,
+            FinalFare = 0,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
