@@ -915,14 +915,19 @@ function QRScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | nu
   const [cardInfo, setCardInfo] = useState<Card | null>(null)
   const [discountType, setDiscountType] = useState<DiscountType | null>(null)
   const [user, setUser] = useState<UserType | null>(null)
+  const [userLoaded, setUserLoaded] = useState(false)
 
   useEffect(() => {
-    authService.getUser().then(setUser)
+    authService.getUser().then(setUser).finally(() => setUserLoaded(true))
   }, [])
 
   useEffect(() => {
     if (cardId === null) {
       setLoading(false)
+      return
+    }
+    if (!userLoaded || !user) {
+      // Wait for user to load before fetching QR
       return
     }
     const fetchQR = async () => {
@@ -932,7 +937,7 @@ function QRScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | nu
         const [ticket, w, card] = await Promise.all([
           qrService.getQR(cardId),
           walletService.getWallet(cardId),
-          getMyCard(user!.userId),
+          getMyCard(user.userId),
         ])
         setQrData(ticket.data)
         setQrSignature(ticket.signature)
