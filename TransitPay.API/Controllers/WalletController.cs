@@ -80,16 +80,14 @@ public class WalletController : ControllerBase
         wallet.Balance += request.Amount;
         wallet.UpdatedAt = DateTime.UtcNow;
 
-        // Generate a Transaction Reference Number (TRN) for the top-up
-        var trn = await _trnGenerator.GenerateNextAsync();
-
+        // Create a simple transaction record for audit trail
+        // Note: TRN generation skipped for now - can be enabled when trn_counters table is properly set up
         _dbContext.Transactions.Add(new Models.Transaction
         {
             CardId = request.CardId,
             Amount = request.Amount,
             TransactionType = TransactionType.TOP_UP,
             TransactionName = "Admin top-up",
-            TransactionReferenceNumber = trn,
             RemainingBalance = wallet.Balance,
             PaymentMode = request.PaymentMode ?? "Admin",
             RegularFare = 0,
