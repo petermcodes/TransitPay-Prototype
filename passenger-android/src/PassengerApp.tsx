@@ -915,40 +915,61 @@ function QRScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | nu
   const [cardInfo, setCardInfo] = useState<Card | null>(null)
   const [discountType, setDiscountType] = useState<DiscountType | null>(null)
   const [user, setUser] = useState<UserType | null>(null)
+  const [userLoaded, setUserLoaded] = useState(false)
 
   useEffect(() => {
-    authService.getUser().then(setUser)
+    authService.getUser().then(setUser).finally(() => setUserLoaded(true))
   }, [])
 
   useEffect(() => {
-    if (cardId === null) {
-      setLoading(false)
+    console.log('[QR] useEffect triggered, userLoaded:', userLoaded, 'user:', !!user, 'cardId:', cardId)
+    
+    // Wait for both user to load AND cardId to be available
+    if (!userLoaded || !user || cardId === null) {
+      console.log('[QR] Waiting for user/cardId to load')
+      if (userLoaded && !cardId) {
+        console.log('[QR] No cardId available')
+        setError('No card linked to your account')
+        setLoading(false)
+      }
       return
     }
+    
+    // Clear error when cardId becomes available
+    console.log('[QR] User and CardId available, fetching QR data...')
+    setError('')
+    
     const fetchQR = async () => {
       setLoading(true)
-      setError('')
       try {
+        console.log('[QR] Fetching QR, wallet, and card data...')
         const [ticket, w, card] = await Promise.all([
           qrService.getQR(cardId),
           walletService.getWallet(cardId),
-          getMyCard(user!.userId),
+          getMyCard(user.userId),
         ])
+        console.log('[QR] QR ticket received:', ticket)
+        console.log('[QR] Wallet received:', w)
+        console.log('[QR] Card received:', card)
         setQrData(ticket.data)
         setQrSignature(ticket.signature)
         setQrCardNumber(ticket.maskedCardNumber || '')
         setWallet(w)
         setCardInfo(card)
+        console.log('[QR] Fetching discount type...')
         const dt = await discountService.getCurrentDiscountType(cardId)
+        console.log('[QR] Discount type received:', dt)
         setDiscountType(dt)
+        console.log('[QR] All data loaded successfully')
       } catch (err) {
+        console.error('[QR] Error fetching QR data:', err)
         setError(err instanceof Error ? err.message : 'Failed to get QR')
       } finally {
         setLoading(false)
       }
     }
     fetchQR()
-  }, [cardId])
+  }, [cardId, userLoaded]) // Add userLoaded to dependencies
 
   const displayName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Passenger'
   const theme = getCardTheme(cardInfo?.passengerType, discountType?.name)
