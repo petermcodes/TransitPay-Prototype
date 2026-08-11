@@ -17,15 +17,27 @@ export interface Card {
  */
 export async function resolveCardId(userId: number): Promise<number | null> {
   const token = await authService.getToken();
-  if (!token) return null;
+  console.log('[Card] resolveCardId called for userId:', userId, 'token exists:', !!token);
+  
+  if (!token) {
+    console.log('[Card] No token found');
+    return null;
+  }
 
   try {
+    console.log('[Card] Fetching /api/cards/me...');
     const response = await api.get<{ success: boolean; data: { cardId: number; maskedCardNumber: string; status: string; passengerType: string; issueDate: string; expiryDate?: string } }>(
       '/api/cards/me'
     );
-    if (!response.success || !response.data) return null;
+    console.log('[Card] Response:', response);
+    if (!response.success || !response.data) {
+      console.log('[Card] No card data in response');
+      return null;
+    }
+    console.log('[Card] Found cardId:', response.data.cardId);
     return response.data.cardId;
-  } catch {
+  } catch (error) {
+    console.error('[Card] Error fetching card:', error);
     return null;
   }
 }
