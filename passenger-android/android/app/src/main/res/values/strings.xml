@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TransitPay Passenger</string>
+    <string name="title_activity_main">TransitPay Passenger</string>
+    <string name="package_name">com.transitpay.passenger</string>
+    <string name="custom_url_scheme">com.transitpay.passenger</string>
+</resources>
