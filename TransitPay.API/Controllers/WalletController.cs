@@ -80,8 +80,10 @@ public class WalletController : ControllerBase
         wallet.Balance += request.Amount;
         wallet.UpdatedAt = DateTime.UtcNow;
 
-        // Create a simple transaction record for audit trail
-        // Note: TRN generation skipped for now - can be enabled when trn_counters table is properly set up
+        // Generate a unique Transaction Reference Number (TNR) for the top-up
+        var tnr = await _trnGenerator.GenerateNextAsync();
+
+        // Create a transaction record for audit trail with the generated TNR
         _dbContext.Transactions.Add(new Models.Transaction
         {
             CardId = request.CardId,
@@ -92,6 +94,7 @@ public class WalletController : ControllerBase
             PaymentMode = request.PaymentMode ?? "Admin",
             RegularFare = 0,
             FinalFare = 0,
+            TransactionReferenceNumber = tnr,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });

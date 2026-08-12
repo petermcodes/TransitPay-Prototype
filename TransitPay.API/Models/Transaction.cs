@@ -128,9 +128,9 @@ public class Transaction
     public TransactionStatus Status { get; set; } = TransactionStatus.COMPLETED;
 
     /// <summary>
-    /// Unique human-readable Transaction Reference Number (TRN).
-    /// Format: TRN-YYYYMMDD-XXXXXX (e.g., TRN-20260804-000001).
-    /// Generated inside the same DB transaction as the wallet deduction.
+    /// Unique human-readable Transaction Reference Number (TNR).
+    /// Format: TNR-XXXXXXXX-XXXXXXXX (e.g., TNR-3F9A2C1E-BD7F4A6C).
+    /// Generated using GUID v4 for guaranteed uniqueness.
     /// </summary>
     [Column("transaction_reference_number")]
     public string? TransactionReferenceNumber { get; set; }
