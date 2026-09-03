@@ -14,6 +14,10 @@ namespace TransitPay.API.Tests.Integration.PostgreSQL;
 /// These tests verify database transactions, constraints, and real concurrency behavior.
 /// </summary>
 [Collection("PostgreSQL collection")]
+/// <summary>
+/// Integration tests that run against a real PostgreSQL instance (via Testcontainers)
+/// to exercise transactions, real constraints, and concurrency behaviour.
+/// </summary>
 public class PostgreSQLIntegrationTests : IClassFixture<PostgreSQLTestWebApplicationFactory>
 {
     private readonly PostgreSQLTestWebApplicationFactory _factory;

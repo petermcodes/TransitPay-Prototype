@@ -8,6 +8,11 @@ using Xunit;
 
 namespace TransitPay.API.Tests;
 
+/// <summary>
+/// Unit tests for <see cref="TransitPay.API.Services.TripService"/> using an
+/// in-memory EF Core database: trip start/end/cancel rules and the
+/// one-active-trip-per-driver rule.
+/// </summary>
 public class TripServiceTests
 {
     private static TransitPayDbContext CreateContext()

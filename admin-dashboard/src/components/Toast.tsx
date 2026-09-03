@@ -1,3 +1,10 @@
+/**
+ * Toast notification system for the admin dashboard.
+ *
+ * `ToastContainer` renders the stack of active notifications (top-right),
+ * `ToastItem` auto-dismisses a toast after 5 seconds with a slide-out
+ * animation, and `useToast` is the hook views use to queue messages.
+ */
 import { useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 
@@ -58,6 +65,9 @@ const iconStyles: Record<ToastType, string> = {
   info: 'text-blue-600'
 }
 
+/**
+ * Renders the stack of active toast notifications in the top-right corner.
+ */
 export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
   return (
     <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
@@ -77,6 +87,10 @@ interface ToastItemProps {
   onRemove: (id: string) => void
 }
 
+/**
+ * A single toast: styles/icons per severity type and auto-dismisses after
+ * 5 seconds (or immediately on manual close), with a 300 ms exit animation.
+ */
 function ToastItem({ toast, onRemove }: ToastItemProps) {
   const [isExiting, setIsExiting] = useState(false)
 
@@ -117,6 +131,10 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
 }
 
 // Hook for managing toasts
+/**
+ * Provides the toast queue and convenience emitters (`success`, `error`,
+ * `warning`, `info`) used by views to surface operation feedback.
+ */
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
 

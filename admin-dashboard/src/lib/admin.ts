@@ -1,6 +1,9 @@
 import { api, getBlob } from './api';
 import { authService } from './auth';
 
+/**
+ * A user account shown in the admin users table.
+ */
 export interface User {
   userId: number;
   username: string;
@@ -12,6 +15,9 @@ export interface User {
   createdAt?: string;
 }
 
+/**
+ * A driver account shown in the admin drivers table.
+ */
 export interface Driver {
   userId: number;
   username: string;
@@ -21,6 +27,9 @@ export interface Driver {
   isActive: boolean;
 }
 
+/**
+ * A bus terminal/station.
+ */
 export interface Terminal {
   terminalId: number;
   terminalName: string;
@@ -28,6 +37,9 @@ export interface Terminal {
   terminalCount: number;
 }
 
+/**
+ * A fare matrix entry (route + vehicle/passenger type → fare).
+ */
 export interface FareRule {
   fareId: number;
   originTerminalId?: number;
@@ -39,6 +51,9 @@ export interface FareRule {
   isActive: boolean;
 }
 
+/**
+ * A financial transaction record shown in the admin transactions table.
+ */
 export interface Transaction {
   transactionId: number;
   passengerName?: string;
@@ -53,6 +68,9 @@ export interface Transaction {
   createdAt: string;
 }
 
+/**
+ * A driver trip (journey) monitored from the admin dashboard.
+ */
 export interface Trip {
   tripId: number;
   driverId: number;
@@ -70,6 +88,9 @@ export interface Trip {
   createdAt: string;
 }
 
+/**
+ * A configurable discount type (e.g., Student, Senior).
+ */
 export interface DiscountType {
   discountTypeId: number;
   name: string;
@@ -81,6 +102,9 @@ export interface DiscountType {
   updatedAt: string | null;
 }
 
+/**
+ * A passenger's discount application (approval workflow).
+ */
 export interface DiscountApplication {
   discountApplicationId: number;
   cardId: number;
@@ -99,6 +123,9 @@ export interface DiscountApplication {
   createdAt: string;
 }
 
+/**
+ * Aggregate counters for the admin dashboard report summary.
+ */
 export interface ReportSummary {
   totalPassengers: number;
   totalDrivers: number;
@@ -107,6 +134,9 @@ export interface ReportSummary {
   totalRevenue: number;
 }
 
+/**
+ * A discount assigned to a passenger's card (derived from an approved application).
+ */
 export interface PassengerDiscount {
   passengerDiscountId: number;
   cardId: number;
@@ -123,7 +153,18 @@ export interface PassengerDiscount {
 type ApiResponseWithMessage<T> = { success: boolean; data: T; message?: string };
 type PaginatedResponse<T> = { success: boolean; data: T; pagination: { page: number; pageSize: number; total: number; totalPages: number }; message?: string };
 
+/**
+ * Admin API client.
+ *
+ * Thin wrapper over `./api` that adds JWT auth headers and normalizes server
+ * responses: every method resolves with typed data or throws an `Error` with
+ * the server-provided message. Covers user/driver accounts, terminals, fare
+ * rules, transactions, reports, trip monitoring and the discount workflow.
+ */
 export const adminService = {
+  /**
+   * Retrieves a paginated list of all user accounts.
+   */
   async getUsers(page = 1, pageSize = 20): Promise<{
     data: User[];
     pagination: { page: number; pageSize: number; total: number; totalPages: number };
@@ -142,6 +183,9 @@ export const adminService = {
     };
   },
 
+  /**
+   * Re-activates a user account (sets IsActive = true).
+   */
   async activateUser(userId: number): Promise<void> {
     const token = authService.getToken();
     const response = await api.put<{ success: boolean; message?: string }>(
@@ -154,6 +198,9 @@ export const adminService = {
     }
   },
 
+  /**
+   * Deactivates a user account (sets IsActive = false). Deactivated users cannot log in.
+   */
   async deactivateUser(userId: number): Promise<void> {
     const token = authService.getToken();
     const response = await api.put<{ success: boolean; message?: string }>(
@@ -166,6 +213,9 @@ export const adminService = {
     }
   },
 
+  /**
+   * Resets a user's password (applies the server-side password policy).
+   */
   async resetPassword(userId: number, newPassword: string): Promise<void> {
     const token = authService.getToken();
     const response = await api.post<{ success: boolean; message?: string }>(
@@ -178,6 +228,9 @@ export const adminService = {
     }
   },
 
+  /**
+   * Lists all driver accounts.
+   */
   async getDrivers(): Promise<Driver[]> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<Driver[]>>(
@@ -190,6 +243,10 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Creates a new driver account. When no password is supplied, the server uses the
+   * generated Driver ID as the default password.
+   */
   async createDriver(data: {
     firstName: string;
     lastName: string;
@@ -208,6 +265,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Adds funds (`amount`) to a card's wallet (admin top-up).
+   */
   async topUpWallet(cardId: number, amount: number): Promise<{ balance: number }> {
     const token = authService.getToken();
     const response = await api.post<ApiResponseWithMessage<{ balance: number }>>(
@@ -221,6 +281,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Fetches a user's transit card (masked number) for wallet/discount operations.
+   */
   async getCardByUserId(userId: number): Promise<{ cardId: number; cardNumber: string }> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<{ cardId: number; cardNumber: string }>>(
@@ -233,6 +296,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Lists all non-deleted terminals.
+   */
   async getTerminals(): Promise<Terminal[]> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<Terminal[]>>(
@@ -245,6 +311,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Creates a new terminal.
+   */
   async createTerminal(data: { terminalName: string }): Promise<Terminal> {
     const token = authService.getToken();
     const response = await api.post<ApiResponseWithMessage<Terminal>>(
@@ -258,6 +327,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Renames a terminal.
+   */
   async updateTerminal(terminalId: number, data: { terminalName: string }): Promise<Terminal> {
     const token = authService.getToken();
     const response = await api.put<ApiResponseWithMessage<Terminal>>(
@@ -271,6 +343,10 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Deletes a terminal. When the terminal has fare rules, the server responds with a
+   * `warning` + `requiresConfirmation` rather than an error so the UI can confirm first.
+   */
   async deleteTerminal(terminalId: number, confirm: boolean = false): Promise<{ 
     success: boolean; 
     warning?: boolean; 
@@ -295,6 +371,9 @@ export const adminService = {
     return response;
   },
 
+  /**
+   * Lists all fare rules.
+   */
   async getFareRules(): Promise<FareRule[]> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<FareRule[]>>(
@@ -307,6 +386,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Creates a fare matrix entry for a route.
+   */
   async createFareRule(data: {
     originTerminalId: number;
     destinationTerminalId: number;
@@ -325,6 +407,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Updates an existing fare matrix entry (route + amount + effective date).
+   */
   async updateFareRule(fareId: number, data: {
     originTerminalId: number;
     destinationTerminalId: number;
@@ -343,6 +428,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Deletes a fare matrix entry.
+   */
   async deleteFareRule(fareId: number): Promise<void> {
     const token = authService.getToken();
     const response = await api.delete<{ success: boolean; message?: string }>(
@@ -354,6 +442,9 @@ export const adminService = {
     }
   },
 
+  /**
+   * Retrieves a paginated list of financial transactions.
+   */
   async getTransactions(page = 1, pageSize = 20): Promise<{
     data: Transaction[];
     pagination: { page: number; pageSize: number; total: number; totalPages: number };
@@ -372,6 +463,10 @@ export const adminService = {
     };
   },
 
+  /**
+   * Fetches aggregate report counters (passengers, drivers, terminals,
+   * transactions, revenue) for the dashboard summary tiles.
+   */
   async getReportSummary(): Promise<ReportSummary> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<ReportSummary>>(
@@ -385,6 +480,9 @@ export const adminService = {
   },
 
   // Trip Management (Read-Only)
+  /**
+   * Retrieves a paginated list of driver trips for monitoring.
+   */
   async getTrips(page = 1, pageSize = 20): Promise<{
     data: Trip[];
     pagination: { page: number; pageSize: number; total: number; totalPages: number };
@@ -403,6 +501,9 @@ export const adminService = {
     };
   },
 
+  /**
+   * Fetches a single trip (with route, status, passenger count and revenue).
+   */
   async getTripById(tripId: number): Promise<Trip> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<Trip>>(
@@ -416,6 +517,9 @@ export const adminService = {
   },
 
   // Discount Type Management
+  /**
+   * Lists all discount types (active and inactive).
+   */
   async getDiscountTypes(): Promise<DiscountType[]> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<DiscountType[]>>(
@@ -428,6 +532,10 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Creates a discount type (e.g., Student 20%). `requiresApproval` controls
+   * whether passengers must submit an application before it can be used.
+   */
   async createDiscountType(data: {
     name: string;
     description?: string;
@@ -446,6 +554,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Updates an existing discount type's name, percentage or approval policy.
+   */
   async updateDiscountType(discountTypeId: number, data: {
     name: string;
     description?: string;
@@ -464,6 +575,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Permanently deletes a discount type. Prefer deactivate for soft disable.
+   */
   async deleteDiscountType(discountTypeId: number): Promise<void> {
     const token = authService.getToken();
     const response = await api.delete<{ success: boolean; message?: string }>(
@@ -475,6 +589,9 @@ export const adminService = {
     }
   },
 
+  /**
+   * Reactivates a discount type so it can be selected by passengers again.
+   */
   async activateDiscountType(discountTypeId: number): Promise<void> {
     const token = authService.getToken();
     const response = await api.post<{ success: boolean; message?: string }>(
@@ -487,6 +604,9 @@ export const adminService = {
     }
   },
 
+  /**
+   * Soft-disables a discount type without deleting it.
+   */
   async deactivateDiscountType(discountTypeId: number): Promise<void> {
     const token = authService.getToken();
     const response = await api.post<{ success: boolean; message?: string }>(
@@ -500,6 +620,9 @@ export const adminService = {
   },
 
   // Discount Application Management
+  /**
+   * Lists discount applications waiting for admin review (status = Pending).
+   */
   async getPendingApplications(): Promise<DiscountApplication[]> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<DiscountApplication[]>>(
@@ -512,6 +635,9 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Lists all discount applications in every status (Pending/Approved/Rejected/Expired).
+   */
   async getAllApplications(): Promise<DiscountApplication[]> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<DiscountApplication[]>>(
@@ -524,6 +650,10 @@ export const adminService = {
     return response.data;
   },
 
+  /**
+   * Approves a pending discount application. On the server this activates the
+   * corresponding passenger discount.
+   */
   async approveApplication(applicationId: number): Promise<void> {
     const token = authService.getToken();
     const response = await api.post<{ success: boolean; message?: string }>(
@@ -536,6 +666,10 @@ export const adminService = {
     }
   },
 
+  /**
+   * Rejects a pending discount application with an optional reason that is
+   * shown to the passenger.
+   */
   async rejectApplication(applicationId: number, rejectionReason?: string): Promise<void> {
     const token = authService.getToken();
     const response = await api.post<{ success: boolean; message?: string }>(
@@ -548,6 +682,10 @@ export const adminService = {
     }
   },
 
+  /**
+   * Downloads the supporting document uploaded with a discount application
+   * (e.g., student ID) as a binary blob for preview/download.
+   */
   async getApplicationDocument(applicationId: number): Promise<Blob> {
     const token = authService.getToken();
     return getBlob(
@@ -557,6 +695,10 @@ export const adminService = {
   },
 
   // Passenger Discount Management (using Discount Applications)
+  /**
+   * Lists the passenger discounts currently in effect, derived client-side
+   * from approved discount applications (there is no dedicated endpoint).
+   */
   async getActivePassengerDiscounts(): Promise<PassengerDiscount[]> {
     const token = authService.getToken();
     // Get all applications and filter by Approved status (status = 1)
@@ -583,6 +725,10 @@ export const adminService = {
     }));
   },
 
+  /**
+   * Lists all passenger discounts in every status, mapped from the
+   * underlying discount applications (no dedicated endpoint exists).
+   */
   async getAllPassengerDiscounts(): Promise<PassengerDiscount[]> {
     const token = authService.getToken();
     const response = await api.get<ApiResponseWithMessage<DiscountApplication[]>>(
@@ -607,6 +753,13 @@ export const adminService = {
     }));
   },
 
+  /**
+   * Manually grants a passenger discount from the admin dashboard.
+   *
+   * Implemented as a two-step server flow because discounts are always
+   * backed by applications: 1) create an application, 2) approve it
+   * immediately so the discount takes effect without passenger action.
+   */
   async assignPassengerDiscount(cardId: number, discountTypeId: number): Promise<PassengerDiscount> {
     const token = authService.getToken();
     // First, create a discount application
@@ -644,6 +797,11 @@ export const adminService = {
     };
   },
 
+  /**
+   * Revokes a passenger discount. Because discounts are backed by discount
+   * applications, removal is performed by rejecting the application with a
+   * fixed reason rather than deleting a record.
+   */
   async removePassengerDiscount(passengerDiscountId: number): Promise<void> {
     const token = authService.getToken();
     // For discount applications, we reject them instead of deleting

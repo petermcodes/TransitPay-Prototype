@@ -12,6 +12,15 @@ using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Services;
 
+/// <summary>
+/// Handles the passenger authentication lifecycle: registration, login, token refresh, and logout.
+/// - Registration always assigns the Passenger role server-side and provisions a transit card,
+///   wallet, and QR code for the new account.
+/// - Login supports username, mobile number, or Driver ID, and enforces account lockout with a
+///   generic "Invalid credentials." message to prevent account enumeration.
+/// - All security-sensitive events are written to the auth audit log with PII minimized via
+///   <see cref="TransitPay.API.Utilities.PiiHasher"/>.
+/// </summary>
 public class AuthService : IAuthService
 {
     private readonly TransitPayDbContext _dbContext;
@@ -22,6 +31,9 @@ public class AuthService : IAuthService
     private readonly AuthenticationSettings _authSettings;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
+    /// <summary>
+    /// Creates a new AuthService.
+    /// </summary>
     public AuthService(
         TransitPayDbContext dbContext,
         PasswordHasher<User> passwordHasher,
@@ -40,6 +52,7 @@ public class AuthService : IAuthService
         _logger = logger;
     }
 
+    /// <inheritdoc />
     public async Task<RegisterResponse> RegisterAsync(string username, string firstName, string lastName, string mobileNumber, string password)
     {
         _logger.LogInformation("Registration attempt for username: {Username}", username);
@@ -187,6 +200,7 @@ public class AuthService : IAuthService
         }
     }
 
+    /// <inheritdoc />
     public async Task<LoginResponse> LoginAsync(string username, string password)
     {
         _logger.LogInformation("Login attempt for username: {Username}", username);
@@ -301,6 +315,7 @@ public class AuthService : IAuthService
         }
     }
 
+    /// <inheritdoc />
     public async Task<RefreshTokenResponse> RefreshTokenAsync(int userId, string refreshToken)
     {
         _logger.LogInformation("Token refresh attempt for user: {UserId}", userId);

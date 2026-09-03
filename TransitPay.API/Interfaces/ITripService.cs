@@ -16,8 +16,8 @@ public interface ITripService
     /// Validates that the driver does not already have an active trip.
     /// </summary>
     /// <param name="driverId">The driver's user ID.</param>
-    /// <param name="originStationId">The origin station ID.</param>
-    /// <param name="finalDestinationStationId">The final destination station ID.</param>
+    /// <param name="originTerminalId">The origin terminal ID.</param>
+    /// <param name="finalDestinationTerminalId">The final destination terminal ID.</param>
     /// <returns>The created trip with Active status.</returns>
     /// <exception cref="InvalidOperationException">Thrown when driver already has an active trip.</exception>
     Task<Trip> StartTripAsync(int driverId, int? originTerminalId, int? finalDestinationTerminalId);

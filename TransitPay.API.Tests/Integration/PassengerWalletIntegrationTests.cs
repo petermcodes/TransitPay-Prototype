@@ -5,6 +5,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests.Integration;
 
+/// <summary>
+/// Integration tests for passenger wallet operations (balance lookup and top-ups)
+/// through the full HTTP pipeline.
+/// </summary>
 public class PassengerWalletIntegrationTests : TestBase
 {
     public PassengerWalletIntegrationTests(TestWebApplicationFactory factory) : base(factory) { }

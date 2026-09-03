@@ -1,3 +1,11 @@
+/**
+ * Discount application review screen (admin approval workflow).
+ *
+ * Shows two tabs — Pending (awaiting review) and All — with search and an
+ * expandable detail row per application. Admins can approve, reject (with a
+ * reason) and preview/download the applicant's supporting document
+ * (inline preview for images, file download otherwise).
+ */
 import { useState, useEffect, Fragment } from 'react'
 import { Search, Eye, Check, X, AlertCircle, Download, ChevronDown, ChevronUp } from 'lucide-react'
 import { adminService } from '../lib/admin'

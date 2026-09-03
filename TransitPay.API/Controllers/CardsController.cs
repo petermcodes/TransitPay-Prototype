@@ -24,6 +24,9 @@ public class CardsController : ControllerBase
 {
     private readonly ICardService _cardService;
 
+    /// <summary>
+    /// Creates a new CardsController.
+    /// </summary>
     public CardsController(ICardService cardService)
     {
         _cardService = cardService;
@@ -174,9 +177,11 @@ public class CardsController : ControllerBase
 /// </summary>
 public class CreateCardRequest
 {
+    /// <summary>The 16-digit card number.</summary>
     [Required(ErrorMessage = "Card number is required.")]
     [RegularExpression(@"^\d{16}$", ErrorMessage = "Card number must be 16 digits.")]
     public string CardNumber { get; set; } = string.Empty;
 
+    /// <summary>The user ID the card belongs to, if any.</summary>
     public int? UserId { get; set; }
 }

@@ -22,6 +22,9 @@ public class QRService : IQRService
     private readonly ISecurityKeyProvider _securityKeyProvider;
     private readonly ILogger<QRService> _logger;
 
+    /// <summary>
+    /// Creates a new QRService.
+    /// </summary>
     public QRService(
         TransitPayDbContext dbContext,
         ISecurityKeyProvider securityKeyProvider,
@@ -308,11 +311,13 @@ public class QRService : IQRService
 /// </summary>
 public class QRPayload
 {
+    /// <summary>The transit card ID the QR is bound to.</summary>
     public int CardId { get; set; }
 
     // NOTE: CardNumber intentionally removed to avoid embedding PAN in QR payload.
     // NOTE: PlanId NOT included because QR is permanent but PlanId changes per trip.
     // NOTE: QRVersion and CreatedAt removed to keep the payload minimal for reliable scanning.
 
+    /// <summary>The random per-card token that authenticates the QR against the database.</summary>
     public string Token { get; set; } = string.Empty;
 }

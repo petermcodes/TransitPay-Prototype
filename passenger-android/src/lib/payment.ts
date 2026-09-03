@@ -1,6 +1,18 @@
+/**
+ * QR-based payment service for the passenger app.
+ *
+ * The passenger's permanent card QR code is the payment instrument: it is
+ * generated once per card (server-side signed) and presented to the driver
+ * for scanning when boarding.
+ */
 import { api } from './api';
 import { authService } from './auth';
 
+/**
+ * Server-signed QR ticket payload for a card.
+ * `data` is the QR content, `signature` proves backend authenticity so
+ * drivers can reject forged codes.
+ */
 export interface QRTicket {
   data: string;
   signature: string;

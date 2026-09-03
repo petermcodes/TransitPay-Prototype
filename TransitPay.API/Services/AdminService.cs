@@ -22,6 +22,9 @@ public class AdminService : IAdminService
     private readonly PasswordHasher<User> _passwordHasher;
     private readonly ILogger<AdminService> _logger;
 
+    /// <summary>
+    /// Creates a new AdminService.
+    /// </summary>
     public AdminService(
         TransitPayDbContext dbContext,
         PasswordHasher<User> passwordHasher,
@@ -300,12 +303,20 @@ public class AdminService : IAdminService
         return user;
     }
 
+    /// <summary>
+    /// Resolves the Passenger role ID from the roles table, or 0 when the role has
+    /// not been seeded yet.
+    /// </summary>
     private async Task<int> GetPassengerRoleIdAsync()
     {
         var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == RoleName.Passenger);
         return role?.RoleId ?? 0;
     }
 
+    /// <summary>
+    /// Resolves the Driver role ID from the roles table, or 0 when the role has
+    /// not been seeded yet.
+    /// </summary>
     private async Task<int> GetDriverRoleIdAsync()
     {
         var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.RoleName == RoleName.Driver);

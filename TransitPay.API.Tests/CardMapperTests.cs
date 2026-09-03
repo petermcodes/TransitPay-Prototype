@@ -6,6 +6,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests;
 
+/// <summary>
+/// Unit tests for <see cref="TransitPay.API.Mappings.CardMapper"/>: card-masking and
+/// DTO mapping shape.
+/// </summary>
 public class CardMapperTests
 {
     private static Card CreateTestCard()

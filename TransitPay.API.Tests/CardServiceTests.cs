@@ -10,6 +10,11 @@ using Xunit;
 
 namespace TransitPay.API.Tests;
 
+/// <summary>
+/// Unit tests for <see cref="TransitPay.API.Services.CardService"/> using an
+/// in-memory EF Core database: lookup, creation (card + wallet atomicity),
+/// duplicate prevention, and validation.
+/// </summary>
 public class CardServiceTests
 {
     private static TransitPayDbContext CreateContext()

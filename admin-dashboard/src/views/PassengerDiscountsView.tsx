@@ -1,3 +1,10 @@
+/**
+ * Passenger discount overview screen.
+ *
+ * Shows discounts currently in effect (derived from approved applications)
+ * in an Active tab plus an All tab, with manual assignment (two-step
+ * create+approve flow in `adminService`) and removal (application rejection).
+ */
 import { useState, useEffect } from 'react'
 import { Search, Plus, Eye, Trash2, User, AlertCircle } from 'lucide-react'
 import { adminService } from '../lib/admin'

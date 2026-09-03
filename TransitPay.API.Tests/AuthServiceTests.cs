@@ -13,6 +13,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests;
 
+/// <summary>
+/// Unit tests for <see cref="TransitPay.API.Services.AuthService"/> using an
+/// in-memory EF Core database: registration, login, lockout, and token refresh.
+/// </summary>
 public class AuthServiceTests
 {
     private static TransitPayDbContext CreateContext()

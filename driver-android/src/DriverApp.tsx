@@ -1,3 +1,12 @@
+/**
+ * TransitPay driver companion app (mobile web).
+ *
+ * Screen flow: Login → Home (trip start/end with origin terminal selection)
+ * → QR Scanner (camera-based passenger fare collection) → Scan Result /
+ * Payment Success → Trip History. Scanning requires an active trip, and the
+ * active-trip state is re-verified against the API whenever the driver
+ * returns Home.
+ */
 import { useState, useEffect, useRef } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import {
@@ -49,6 +58,14 @@ function formatTripTime(iso?: string): string {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Driver login screen.
+ *
+ * Authenticates with driver ID + password, remembers the last driver ID in
+ * localStorage, then checks the API for an in-progress trip so the workflow
+ * can be restored (result reported to the parent via `onTripStatusChecked`).
+ * Always lands on Home.
+ */
 function DriverLogin({ go, onTripStatusChecked }: { go: (s: DScreen) => void; onTripStatusChecked?: (hasActiveTrip: boolean) => void }) {
   const [id, setId] = useState('')
   const [pass, setPass] = useState('')
@@ -138,6 +155,14 @@ function DriverLogin({ go, onTripStatusChecked }: { go: (s: DScreen) => void; on
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 
+/**
+ * Driver dashboard / trip control screen.
+ *
+ * Without an active trip: pick an origin terminal and start a trip. With an
+ * active trip: shows the running trip summary (passengers, revenue, elapsed
+ * time) and the option to end it. Trip state changes are propagated to the
+ * parent via `onTripChanged` so the rest of the app stays in sync.
+ */
 function DriverHome({ go, activeTrip, onTripChanged, tripActive, setTripActive, selectedOrigin, setSelectedOrigin }: {
   go: (s: DScreen) => void; activeTrip: Trip | null; onTripChanged: (trip: Trip | null) => void
   tripActive: boolean; setTripActive: (active: boolean) => void
@@ -430,6 +455,14 @@ function DriverHome({ go, activeTrip, onTripChanged, tripActive, setTripActive, 
 
 // ── QR SCANNER ────────────────────────────────────────────────────────────────
 
+/**
+ * Camera-based QR scanner for collecting passenger fares.
+ *
+ * Uses html5-qrcode with the rear camera; on a successful decode it stops
+ * the camera and processes the scanned payload as a driver-initiated
+ * payment (requires an active trip — the parent blocks navigation here
+ * otherwise). The scanner is stopped and cleaned up on unmount.
+ */
 function QRScanner({ go, activeTrip }: { go: (s: DScreen) => void, activeTrip: Trip | null }) {
   const [scanning, setScanning] = useState(true)
   const [error, setError] = useState('')
@@ -569,6 +602,12 @@ function QRScanner({ go, activeTrip }: { go: (s: DScreen) => void, activeTrip: T
 
 // ── SCAN RESULT ───────────────────────────────────────────────────────────────
 
+/**
+ * Receipt screen for the last collected fare.
+ *
+ * Renders the receipt the scanner stashed in sessionStorage; falls back to
+ * an empty state prompting a new scan when no receipt data exists.
+ */
 function ScanResult({ go }: { go: (s: DScreen) => void }) {
   const [receipt, setReceipt] = useState<ScanReceipt | null>(null)
 
@@ -664,6 +703,7 @@ function ScanResult({ go }: { go: (s: DScreen) => void }) {
 
 // ── PAYMENT SUCCESS ───────────────────────────────────────────────────────────
 
+/** Full-screen confirmation shown after a fare is collected successfully. */
 function DriverPaySuccess({ go }: { go: (s: DScreen) => void }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center bg-[#F0F4FF] px-6 gap-5 fade-in">
@@ -684,6 +724,12 @@ function DriverPaySuccess({ go }: { go: (s: DScreen) => void }) {
 
 // ── TRIP HISTORY ──────────────────────────────────────────────────────────────
 
+/**
+ * Driver trip history screen.
+ *
+ * Lists past trips filterable by time period (today/week/month/year); each
+ * trip can be expanded to load and show its passenger transactions.
+ */
 function TripHistory({ go }: { go: (s: DScreen) => void }) {
   const [trips, setTrips] = useState<Trip[]>([])
   const [loading, setLoading] = useState(true)
@@ -924,6 +970,7 @@ function TripHistory({ go }: { go: (s: DScreen) => void }) {
 
 // ── BOTTOM NAV ────────────────────────────────────────────────────────────────
 
+/** Bottom navigation bar: Dashboard, Scan (center action) and History. */
 function DriverNav({ current, go }: { current: DScreen; go: (s: DScreen) => void }) {
   return (
     <div className="bg-white border-t border-slate-100 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
@@ -955,6 +1002,14 @@ function DriverNav({ current, go }: { current: DScreen; go: (s: DScreen) => void
 
 const showNav: DScreen[] = ['home', 'trip-history']
 
+/**
+ * Root driver app component.
+ *
+ * Owns global driver state (active trip, selected origin terminal) and
+ * routes between screens. The active-trip flag is re-verified against the
+ * backend on every navigation Home, and navigation to the scanner is
+ * blocked while no trip is active.
+ */
 export default function DriverApp() {
   const [screen, setScreen] = useState<DScreen>('login')
   const [selectedOrigin, setSelectedOrigin] = useState<Terminal | null>(null)

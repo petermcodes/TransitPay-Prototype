@@ -11,6 +11,7 @@ namespace TransitPay.API.Models;
 [Table("discount_programs")]
 public class DiscountProgram
 {
+    /// <summary>Primary key.</summary>
     [Key]
     [Column("discount_program_id")]
     public int DiscountProgramId { get; set; }
@@ -51,12 +52,15 @@ public class DiscountProgram
     [Column("requires_approval")]
     public bool RequiresApproval { get; set; } = true;
 
+    /// <summary>When the discount program was created (UTC).</summary>
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>When the discount program was last updated.</summary>
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>Soft-delete timestamp. Null while the record is live.</summary>
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 

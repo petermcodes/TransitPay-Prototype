@@ -1,3 +1,9 @@
+/**
+ * Create/edit form for fare matrix entries (origin → destination fare).
+ *
+ * Used both for adding a new rule and editing an existing one (via
+ * `initialData`). Enforces distinct origin/destination and a positive amount.
+ */
 import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'

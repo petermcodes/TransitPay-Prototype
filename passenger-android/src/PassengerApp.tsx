@@ -1,3 +1,11 @@
+/**
+ * TransitPay passenger app (mobile web).
+ *
+ * Screen flow: Splash → Welcome → Login/Register (OTP) → Home, with Wallet,
+ * Top-up, Payment QR, Discounts, Trip Planning and Profile screens. Global
+ * state (current screen, resolved transit card ID) lives in the root
+ * `PassengerApp` component.
+ */
 import { useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import {
@@ -116,6 +124,7 @@ function formatTxDate(iso: string): string {
 
 // ── SPLASH ────────────────────────────────────────────────────────────────────
 
+/** Branded splash screen; auto-advances after ~2 seconds. */
 function SplashScreen({ next }: { next: () => void }) {
   useEffect(() => { const t = setTimeout(next, 2200); return () => clearTimeout(t) }, [next])
   return (
@@ -143,6 +152,7 @@ function SplashScreen({ next }: { next: () => void }) {
 
 // ── WELCOME ───────────────────────────────────────────────────────────────────
 
+/** Welcome/onboarding screen with entry points to login and registration. */
 function WelcomeScreen({ go }: { go: (s: Screen) => void }) {
   return (
     <div className="flex-1 flex flex-col min-h-full bg-white">
@@ -180,6 +190,12 @@ function WelcomeScreen({ go }: { go: (s: Screen) => void }) {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Passenger login screen.
+ *
+ * Authenticates with mobile number + password; the last used number is
+ * pre-filled from local storage. On success the app continues to Home.
+ */
 function LoginScreen({ go }: { go: (s: Screen) => void }) {
   const [mobile, setMobile] = useState(() => {
     // Remember last logged-in mobile number
@@ -242,6 +258,10 @@ function LoginScreen({ go }: { go: (s: Screen) => void }) {
 
 // ── REGISTER ──────────────────────────────────────────────────────────────────
 
+/**
+ * Passenger registration screen: collects profile details and credentials
+ * to create a new TransitPay account.
+ */
 function RegisterScreen({ go }: { go: (s: Screen) => void }) {
   const [form, setForm] = useState({ first: '', last: '', mobile: '', pass: '', confirm: '' })
   const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -340,6 +360,12 @@ function RegisterScreen({ go }: { go: (s: Screen) => void }) {
 
 // ── FORGOT PASSWORD ───────────────────────────────────────────────────────────
 
+/**
+ * Forgot-password screen (prototype flow).
+ *
+ * Collects the registered mobile number and simulates sending a 6-digit
+ * OTP before handing off to the OTP screen; no backend call is made.
+ */
 function ForgotScreen({ go }: { go: (s: Screen) => void }) {
   const [mobile, setMobile] = useState('')
   const [sent, setSent] = useState(false)
@@ -377,6 +403,11 @@ function ForgotScreen({ go }: { go: (s: Screen) => void }) {
 
 // ── OTP ───────────────────────────────────────────────────────────────────────
 
+/**
+ * OTP verification screen: six-digit code entry with auto-advance between
+ * inputs. Verifying continues into the app (prototype — the code is not
+ * validated against the backend).
+ */
 function OTPScreen({ go }: { go: (s: Screen) => void }) {
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const full = otp.every(d => d !== '')
@@ -411,6 +442,7 @@ function OTPScreen({ go }: { go: (s: Screen) => void }) {
 
 // ── TRANSIT CARD NOT FOUND ────────────────────────────────────────────────────
 
+/** Displayed when no transit card is linked to the passenger's account. */
 function TransitCardNotFound({ go }: { go: (s: Screen) => void }) {
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF] overflow-y-auto mobile-scroll">
@@ -442,6 +474,14 @@ function TransitCardNotFound({ go }: { go: (s: Screen) => void }) {
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 
+/**
+ * Passenger home dashboard.
+ *
+ * Loads wallet balance, card info, the passenger's active discount type and
+ * the active trip plan (with backend-calculated fare) in parallel, plus a
+ * short list of recent transactions. Terminal names are mapped locally from
+ * the terminal list when the plan response omits them.
+ */
 function HomeScreen({ go, cardId, onNavigateToDetail }: { go: (s: Screen) => void; cardId: number | null; onNavigateToDetail?: (planId?: number) => void }) {
   const [showBal, setShowBal] = useState(true)
   const [wallet, setWallet] = useState<Wallet | null>(null)
@@ -690,6 +730,10 @@ function HomeScreen({ go, cardId, onNavigateToDetail }: { go: (s: Screen) => voi
 
 // ── WALLET ────────────────────────────────────────────────────────────────────
 
+/**
+ * Wallet screen: current balance plus the transaction history (filterable
+ * by type) for the passenger's card.
+ */
 function WalletScreen({ go, cardId, onSelectTx }: { go: (s: Screen) => void; cardId: number | null; onSelectTx?: (tx: Transaction) => void }) {
   const [filter, setFilter] = useState('all')
   const [wallet, setWallet] = useState<Wallet | null>(null)
@@ -828,6 +872,10 @@ function WalletScreen({ go, cardId, onSelectTx }: { go: (s: Screen) => void; car
 
 // ── TOP UP ────────────────────────────────────────────────────────────────────
 
+/**
+ * Wallet top-up screen: choose or enter an amount and confirm the credit
+ * to the passenger's wallet balance.
+ */
 function TopUpScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | null }) {
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [loading, setLoading] = useState(true)
@@ -904,6 +952,14 @@ function TopUpScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number |
 
 // ── QR CODE ───────────────────────────────────────────────────────────────────
 
+/**
+ * Payment QR screen.
+ *
+ * Requests a server-signed QR payload for the passenger's card and renders
+ * it for driver scanning; shows the linked wallet balance and supports
+ * copying the code. Waits for both the user profile and card ID before
+ * fetching, and surfaces a clear error when no card is linked.
+ */
 function QRScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | null }) {
   const [qrData, setQrData] = useState('')
   const [qrSignature, setQrSignature] = useState('')
@@ -1051,6 +1107,10 @@ function QRScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | nu
 
 // ── DISCOUNTS ─────────────────────────────────────────────────────────────────
 
+/**
+ * Discounts overview: lists the passenger's discount applications and their
+ * review statuses.
+ */
 function DiscountsScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | null }) {
   const [applications, setApplications] = useState<DiscountApplication[]>([])
   const [loading, setLoading] = useState(true)
@@ -1139,6 +1199,14 @@ function DiscountsScreen({ go, cardId }: { go: (s: Screen) => void; cardId: numb
 
 // ── APPLY FOR DISCOUNT ────────────────────────────────────────────────────────
 
+/**
+ * Discount application form.
+ *
+ * Lets the passenger pick an active discount type and attach a supporting
+ * document (read into the request payload); submission creates a Pending
+ * application for admin review. The screen first checks for an existing
+ * application so duplicates aren't created.
+ */
 function ApplyDiscountScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | null }) {
   const [discountTypes, setDiscountTypes] = useState<DiscountType[]>([])
   const [selectedType, setSelectedType] = useState<DiscountType | null>(null)
@@ -1403,6 +1471,7 @@ function ApplyDiscountScreen({ go, cardId }: { go: (s: Screen) => void; cardId: 
 
 // ── PROFILE ───────────────────────────────────────────────────────────────────
 
+/** Profile screen: passenger identity details plus a wallet summary. */
 function ProfileScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | null }) {
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1504,6 +1573,7 @@ function ProfileScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number
 
 // ── BOTTOM NAV ────────────────────────────────────────────────────────────────
 
+/** Bottom navigation bar for the main passenger tabs. */
 function BottomNav({ current, go }: { current: Screen; go: (s: Screen) => void }) {
   const tabs = [
     { screen: 'home' as Screen, icon: Home, label: 'Home' },
@@ -1537,6 +1607,13 @@ function BottomNav({ current, go }: { current: Screen; go: (s: Screen) => void }
 
 // ── PLAN TRIP ────────────────────────────────────────────────────────────────
 
+/**
+ * Trip planning screen.
+ *
+ * Lets the passenger pick origin and destination terminals, previews the
+ * backend-calculated fare (including any passenger discount), creates the
+ * trip plan, and supports cancelling an active plan.
+ */
 function PlanTripScreen({ go, cardId, onNavigateToDetail }: { go: (s: Screen) => void; cardId: number | null; onNavigateToDetail?: (planId?: number) => void }) {
   const [terminals, setTerminals] = useState<{ terminalId: number; terminalName: string }[]>([])
   const [originId, setOriginId] = useState('')
@@ -1835,6 +1912,7 @@ function PlanTripScreen({ go, cardId, onNavigateToDetail }: { go: (s: Screen) =>
 
 // ── TRIP PLAN HISTORY ────────────────────────────────────────────────────────
 
+/** Trip plan history: past plans (Cancelled/Used only) with status filtering. */
 function TripPlanHistoryScreen({ go, cardId, onSelectPlan }: { go: (s: Screen) => void; cardId: number | null; onSelectPlan?: (planId: number) => void }) {
   const [plans, setPlans] = useState<TripPlan[]>([])
   const [allPlans, setAllPlans] = useState<TripPlan[]>([])
@@ -1945,6 +2023,11 @@ function TripPlanHistoryScreen({ go, cardId, onSelectPlan }: { go: (s: Screen) =
 
 // ── TRIP PLAN DETAIL ─────────────────────────────────────────────────────────
 
+/**
+ * Trip plan detail: shows a specific plan (by ID from history, or the
+ * active plan) with the backend-calculated fare breakdown including any
+ * applicable discount.
+ */
 function TripPlanDetailScreen({ go, cardId, planId }: { go: (s: Screen) => void; cardId: number | null; planId?: number }) {
   const [plan, setPlan] = useState<TripPlan | null>(null)
   const [loading, setLoading] = useState(true)
@@ -2102,6 +2185,7 @@ function TripPlanDetailScreen({ go, cardId, planId }: { go: (s: Screen) => void;
 
 // ── TRANSACTION DETAIL ──────────────────────────────────────────────────────
 
+/** Detail view for a single wallet transaction. */
 function TransactionDetailScreen({ go, tx }: { go: (s: Screen) => void; tx: Transaction }) {
   const isPayment = tx.transactionType.toLowerCase() === 'payment' || tx.transactionType.toLowerCase() === 'fare'
   const isTopUp = tx.transactionType.toLowerCase() === 'top_up' || tx.transactionType.toLowerCase() === 'topup'
@@ -2199,6 +2283,13 @@ function TransactionDetailScreen({ go, tx }: { go: (s: Screen) => void; tx: Tran
 
 const showNav: Screen[] = ['home', 'wallet', 'qr', 'profile', 'discounts', 'trip-plan-history']
 
+/**
+ * Root passenger app component.
+ *
+ * Handles global routing between screens and session restore on startup
+ * (auth token + transit card resolution). The bottom nav is shown only on
+ * the main tab screens listed in `showNav`.
+ */
 export default function PassengerApp() {
   const [screen, setScreen] = useState<Screen>('splash')
   const [cardId, setCardId] = useState<number | null>(null)

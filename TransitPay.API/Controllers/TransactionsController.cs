@@ -7,6 +7,11 @@ using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Transaction history endpoints for passengers and drivers.
+/// Enforces card ownership (passengers may only read their own cards' transactions;
+/// drivers and admins may read any card's transactions for operational purposes).
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -14,11 +19,18 @@ public class TransactionsController : ControllerBase
 {
     private readonly TransitPayDbContext _dbContext;
 
+    /// <summary>
+    /// Creates a new TransactionsController.
+    /// </summary>
     public TransactionsController(TransitPayDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    /// <summary>
+    /// Retrieves the transaction history for a card, newest first, with pagination.
+    /// Passengers may only query cards they own; Admins and Drivers may query any card.
+    /// </summary>
     [HttpGet("{cardId}")]
     public async Task<IActionResult> GetTransactions(int cardId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {

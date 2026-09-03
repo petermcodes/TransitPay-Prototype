@@ -13,6 +13,11 @@ using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Administration endpoints (Admin only): user/driver management, administrator creation,
+/// terminal and fare-matrix CRUD (with audit history), transaction browsing, report
+/// summaries, and read-only trip monitoring.
+/// </summary>
 [ApiController]
 [Route("api/admin")]
 [Authorize(Roles = "Admin")]
@@ -21,12 +26,18 @@ public class AdminController : ControllerBase
     private readonly TransitPayDbContext _dbContext;
     private readonly IAdminService _adminService;
 
+    /// <summary>
+    /// Creates a new AdminController.
+    /// </summary>
     public AdminController(TransitPayDbContext dbContext, IAdminService adminService)
     {
         _dbContext = dbContext;
         _adminService = adminService;
     }
 
+    /// <summary>
+    /// Retrieves all users with pagination (Admin only).
+    /// </summary>
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -44,6 +55,9 @@ public class AdminController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Retrieves all driver accounts with pagination (Admin only).
+    /// </summary>
     [HttpGet("drivers")]
     public async Task<IActionResult> GetDrivers([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -245,6 +259,9 @@ public class AdminController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Retrieves all non-deleted terminals (Admin only).
+    /// </summary>
     [HttpGet("terminals")]
     public async Task<IActionResult> GetTerminals()
     {
@@ -255,6 +272,9 @@ public class AdminController : ControllerBase
         return Ok(new { success = true, message = "Terminals retrieved successfully.", data = terminals });
     }
 
+    /// <summary>
+    /// Creates a new terminal (Admin only). New terminals start active.
+    /// </summary>
     [HttpPost("terminals")]
     public async Task<IActionResult> CreateTerminal([FromBody] CreateTerminalRequest request)
     {
@@ -403,6 +423,9 @@ public class AdminController : ControllerBase
         return Ok(new { success = true, message = message });
     }
 
+    /// <summary>
+    /// Retrieves all non-deleted fare rules with terminal names (Admin only).
+    /// </summary>
     [HttpGet("fare-rules")]
     public async Task<IActionResult> GetFareRules()
     {
@@ -423,6 +446,10 @@ public class AdminController : ControllerBase
         return Ok(new { success = true, message = "Fare rules retrieved successfully.", data = fareRules });
     }
 
+    /// <summary>
+    /// Creates a new fare rule (Admin only). Duplicate origin/destination routes and
+    /// invalid terminals are rejected.
+    /// </summary>
     [HttpPost("fare-rules")]
     public async Task<IActionResult> CreateFareRule([FromBody] CreateFareRuleRequest request)
     {
@@ -584,6 +611,9 @@ public class AdminController : ControllerBase
         return Ok(new { success = true, message = "Fare rule deleted successfully." });
     }
 
+    /// <summary>
+    /// Retrieves all transactions with pagination, newest first (Admin only).
+    /// </summary>
     [HttpGet("transactions")]
     public async Task<IActionResult> GetTransactions([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -626,6 +656,10 @@ public class AdminController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Returns aggregate counters for the admin dashboard: total passengers, drivers,
+    /// terminals, transactions, and collected revenue.
+    /// </summary>
     [HttpGet("reports/summary")]
     public async Task<IActionResult> GetReportSummary()
     {
@@ -757,16 +791,23 @@ public class AdminController : ControllerBase
     }
 }
 
+/// <summary>
+/// Request DTO for creating a fare matrix entry (Admin).
+/// </summary>
 public class CreateFareRuleRequest
 {
+    /// <summary>The boarding terminal ID.</summary>
     [Required(ErrorMessage = "Origin terminal ID is required.")]
     public int OriginTerminalId { get; set; }
 
+    /// <summary>The alighting terminal ID.</summary>
     [Required(ErrorMessage = "Destination terminal ID is required.")]
     public int DestinationTerminalId { get; set; }
 
+    /// <summary>The fare amount charged for this route.</summary>
     [Range(0.01, 10000, ErrorMessage = "Fare amount must be greater than 0.")]
     public decimal FareAmount { get; set; }
 
+    /// <summary>The date from which this fare rule takes effect.</summary>
     public DateTime EffectiveDate { get; set; } = DateTime.UtcNow;
 }

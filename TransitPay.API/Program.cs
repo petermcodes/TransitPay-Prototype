@@ -12,6 +12,24 @@ using TransitPay.API.Interfaces;
 using TransitPay.API.Models;
 using TransitPay.API.Services;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// TransitPay.API — application entry point (top-level statements).
+//
+// Startup pipeline overview:
+//   1. Resolve secrets strictly from environment variables (no hardcoded fallbacks).
+//   2. Resolve the database connection string, prioritizing DATABASE_URL / POSTGRES_URL
+//      (Railway), then individual DATABASE_* variables (Render), then appsettings.json
+//      (local development). PostgreSQL URL  →  Npgsql key/value conversion happens here.
+//   3. Register services: EF Core DbContext, security key provider, token/auth services,
+//      trip/trip-plan/discount/payment/admin services, JWT Bearer auth, CORS for the
+//      three frontend origins, per-IP rate limiting for auth endpoints, health checks.
+//   4. On startup (blocking): apply EF migrations (relational providers only), seed
+//      roles, seed the bootstrap Administrator, and backfill data (test card + wallet,
+//      wallets, QR codes) for any missing records.
+//   5. Build the middleware pipeline (Swagger in dev, exception handling, auth, rate
+//      limiting, routing, map controllers and health endpoints).
+// ═══════════════════════════════════════════════════════════════════════════════
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Resolve secrets from environment variables ONLY — no hardcoded fallbacks.
@@ -19,8 +37,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Production deployments using DATABASE_URL don't need DB_PASSWORD
 var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
 
-// Helper method to convert Render's DATABASE_URL to Npgsql connection string format
-// Must be defined before use
+// Helper method to convert Render's DATABASE_URL to Npgsql connection string format.
+// Converts a PostgreSQL URL (e.g., postgresql://user:pass@host:5432/db) into the
+// host-based Npgsql connection string format
+// (Host=...;Port=...;Database=...;Username=...;Password=...).
+// Throws InvalidOperationException when the URL cannot be parsed.
+// (Note: local functions in top-level statements do not support XML doc comments,
+// so this is written as a plain comment.)
 static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
 {
     try

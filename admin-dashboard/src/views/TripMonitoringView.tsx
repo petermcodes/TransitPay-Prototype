@@ -1,3 +1,9 @@
+/**
+ * Live trip monitoring screen.
+ *
+ * Shows all currently Active trips with aggregate passenger/revenue counters.
+ * Auto-refreshes every 30 seconds while `autoRefresh` is enabled.
+ */
 import { useState, useEffect } from 'react'
 import { Activity, MapPin, Users, DollarSign, Clock, RefreshCw } from 'lucide-react'
 import { adminService } from '../lib/admin'

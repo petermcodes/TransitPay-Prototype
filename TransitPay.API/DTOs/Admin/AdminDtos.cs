@@ -8,18 +8,22 @@ namespace TransitPay.API.DTOs.Admin;
 /// </summary>
 public class CreateDriverRequest
 {
+    /// <summary>The driver's first name.</summary>
     [Required(ErrorMessage = "First name is required.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "First name must be between 2 and 50 characters.")]
     public string FirstName { get; set; } = string.Empty;
 
+    /// <summary>The driver's last name.</summary>
     [Required(ErrorMessage = "Last name is required.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "Last name must be between 2 and 50 characters.")]
     public string LastName { get; set; } = string.Empty;
 
+    /// <summary>The driver's Philippine mobile number (e.g., 09171234567).</summary>
     [Required(ErrorMessage = "Mobile number is required.")]
     [RegularExpression(@"^09\d{9}$", ErrorMessage = "Mobile number must be a valid Philippine number (e.g., 09171234567).")]
     public string MobileNumber { get; set; } = string.Empty;
 
+    /// <summary>Initial password. When omitted, the Driver ID (DRV-xxxxxx) becomes the default password.</summary>
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters.")]
     public string? Password { get; set; }
 }
@@ -30,22 +34,27 @@ public class CreateDriverRequest
 /// </summary>
 public class CreateAdministratorRequest
 {
+    /// <summary>The admin's login username.</summary>
     [Required(ErrorMessage = "Username is required.")]
     [StringLength(50, MinimumLength = 3, ErrorMessage = "Username must be between 3 and 50 characters.")]
     public string Username { get; set; } = string.Empty;
 
+    /// <summary>The admin's first name.</summary>
     [Required(ErrorMessage = "First name is required.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "First name must be between 2 and 50 characters.")]
     public string FirstName { get; set; } = string.Empty;
 
+    /// <summary>The admin's last name.</summary>
     [Required(ErrorMessage = "Last name is required.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "Last name must be between 2 and 50 characters.")]
     public string LastName { get; set; } = string.Empty;
 
+    /// <summary>The admin's Philippine mobile number (e.g., 09171234567).</summary>
     [Required(ErrorMessage = "Mobile number is required.")]
     [RegularExpression(@"^09\d{9}$", ErrorMessage = "Mobile number must be a valid Philippine number (e.g., 09171234567).")]
     public string MobileNumber { get; set; } = string.Empty;
 
+    /// <summary>The admin's initial password.</summary>
     [Required(ErrorMessage = "Password is required.")]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters.")]
     public string Password { get; set; } = string.Empty;
@@ -56,14 +65,17 @@ public class CreateAdministratorRequest
 /// </summary>
 public class UpdateUserRequest
 {
+    /// <summary>The user's first name.</summary>
     [Required(ErrorMessage = "First name is required.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "First name must be between 2 and 50 characters.")]
     public string FirstName { get; set; } = string.Empty;
 
+    /// <summary>The user's last name.</summary>
     [Required(ErrorMessage = "Last name is required.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "Last name must be between 2 and 50 characters.")]
     public string LastName { get; set; } = string.Empty;
 
+    /// <summary>The user's Philippine mobile number (e.g., 09171234567).</summary>
     [Required(ErrorMessage = "Mobile number is required.")]
     [RegularExpression(@"^09\d{9}$", ErrorMessage = "Mobile number must be a valid Philippine number (e.g., 09171234567).")]
     public string MobileNumber { get; set; } = string.Empty;
@@ -74,6 +86,7 @@ public class UpdateUserRequest
 /// </summary>
 public class ResetPasswordRequest
 {
+    /// <summary>The new password, validated against the TransitPay password policy.</summary>
     [Required(ErrorMessage = "New password is required.")]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters.")]
     public string NewPassword { get; set; } = string.Empty;

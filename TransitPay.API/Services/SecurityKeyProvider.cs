@@ -14,6 +14,10 @@ public class SecurityKeyProvider : ISecurityKeyProvider
     private readonly byte[] _keyBytes;
     private readonly SymmetricSecurityKey _symmetricSecurityKey;
 
+    /// <summary>
+    /// Creates a new SecurityKeyProvider. Reads the JWT_KEY environment variable and
+    /// fails fast at startup when it is missing.
+    /// </summary>
     public SecurityKeyProvider(IConfiguration configuration, ILogger<SecurityKeyProvider> logger)
     {
         // Read the JWT key ONLY from the JWT_KEY environment variable.

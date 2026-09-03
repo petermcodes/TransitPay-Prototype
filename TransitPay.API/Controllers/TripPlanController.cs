@@ -9,6 +9,11 @@ using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Trip Plan endpoints for the passenger app: create an active plan (locking the fare),
+/// query the active plan, change the destination, cancel, and browse plan history.
+/// All endpoints resolve the authenticated user's card from JWT claims.
+/// </summary>
 [ApiController]
 [Route("api/trip-plan")]
 [Authorize]
@@ -18,6 +23,9 @@ public class TripPlanController : ControllerBase
     private readonly ILogger<TripPlanController> _logger;
     private readonly TransitPayDbContext _dbContext;
 
+    /// <summary>
+    /// Creates a new TripPlanController.
+    /// </summary>
     public TripPlanController(ITripPlanService tripPlanService, ILogger<TripPlanController> logger, TransitPayDbContext dbContext)
     {
         _tripPlanService = tripPlanService;

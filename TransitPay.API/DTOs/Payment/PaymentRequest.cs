@@ -8,12 +8,15 @@ namespace TransitPay.API.DTOs.Payment;
 /// </summary>
 public class PaymentRequest
 {
+    /// <summary>The passenger's transit card ID.</summary>
     [Required(ErrorMessage = "Card ID is required.")]
     public int CardId { get; set; }
 
+    /// <summary>The boarding terminal ID.</summary>
     [Required(ErrorMessage = "Origin terminal ID is required.")]
     public int OriginTerminalId { get; set; }
 
+    /// <summary>The alighting terminal ID.</summary>
     [Required(ErrorMessage = "Destination terminal ID is required.")]
     public int DestinationTerminalId { get; set; }
 

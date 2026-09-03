@@ -1,3 +1,7 @@
+/**
+ * Legacy/unused modal component (not imported anywhere in the app).
+ * Kept from an earlier prototype iteration where terminals were called "towns".
+ */
 import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'

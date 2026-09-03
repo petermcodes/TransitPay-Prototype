@@ -5,6 +5,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests.Integration;
 
+/// <summary>
+/// Integration tests for the admin endpoints (users, drivers, admins, terminals,
+/// fare matrix, reports) through the full HTTP pipeline.
+/// </summary>
 public class AdminIntegrationTests : TestBase
 {
     public AdminIntegrationTests(TestWebApplicationFactory factory) : base(factory) { }

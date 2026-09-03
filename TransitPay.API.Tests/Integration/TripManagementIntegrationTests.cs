@@ -5,6 +5,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests.Integration;
 
+/// <summary>
+/// Integration tests for trip management (start/end/cancel, boarding origin updates)
+/// through the full HTTP pipeline.
+/// </summary>
 public class TripManagementIntegrationTests : TestBase
 {
     public TripManagementIntegrationTests(TestWebApplicationFactory factory) : base(factory) { }

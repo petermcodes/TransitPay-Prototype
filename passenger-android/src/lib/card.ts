@@ -1,10 +1,14 @@
 import { api } from './api';
 import { authService } from './auth';
 
+/** TransitPay card as seen by the passenger (card number is always masked). */
 export interface Card {
   cardId: number;
+  /** Masked card number, e.g. "****-****-****-1234" — never the PAN. */
   maskedCardNumber: string;
+  /** Card lifecycle state ("Active", "Blocked", ...). */
   status: string;
+  /** Passenger classification driving the card theme and discounts. */
   passengerType?: string;
   issueDate?: string;
   expiryDate?: string;

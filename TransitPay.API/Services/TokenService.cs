@@ -21,6 +21,10 @@ public class TokenService : ITokenService
     private readonly ISecurityKeyProvider _securityKeyProvider;
     private readonly ILogger<TokenService> _logger;
 
+    /// <summary>
+    /// Creates a new TokenService. The centralized <see cref="ISecurityKeyProvider"/>
+    /// keeps JWT signing keys consistent across the application.
+    /// </summary>
     public TokenService(
         IConfiguration configuration,
         TransitPayDbContext dbContext,
@@ -33,6 +37,7 @@ public class TokenService : ITokenService
         _logger = logger;
     }
 
+    /// <inheritdoc />
     public async Task<string> CreateTokenAsync(User user)
     {
         try
@@ -69,6 +74,7 @@ public class TokenService : ITokenService
         }
     }
 
+    /// <inheritdoc />
     public async Task<RefreshToken> CreateRefreshTokenAsync(int userId)
     {
         try
@@ -94,6 +100,7 @@ public class TokenService : ITokenService
         }
     }
 
+    /// <inheritdoc />
     public async Task<RefreshToken?> RotateRefreshTokenAsync(int userId, string currentToken)
     {
         try
@@ -174,6 +181,7 @@ public class TokenService : ITokenService
         }
     }
 
+    /// <inheritdoc />
     public async Task RevokeAllRefreshTokensAsync(int userId)
     {
         try
@@ -197,6 +205,7 @@ public class TokenService : ITokenService
         }
     }
 
+    /// <inheritdoc />
     public async Task<bool> ValidateRefreshTokenAsync(int userId, string token)
     {
         try

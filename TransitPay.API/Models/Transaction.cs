@@ -4,13 +4,20 @@ using TransitPay.API.Enums;
 
 namespace TransitPay.API.Models;
 
+/// <summary>
+/// Represents a financial transaction: a fare payment collected by a driver or a
+/// wallet top-up made by the passenger. Every payment stores a full snapshot of the
+/// route, fare breakdown, and resulting wallet balance for audit and reconciliation.
+/// </summary>
 [Table("transactions")]
 public class Transaction
 {
+    /// <summary>Primary key.</summary>
     [Key]
     [Column("transaction_id")]
     public int TransactionId { get; set; }
 
+    /// <summary>The card involved in the transaction (null for some legacy records).</summary>
     [ForeignKey(nameof(Card))]
     [Column("card_id")]
     public int? CardId { get; set; }
@@ -112,12 +119,15 @@ public class Transaction
     [Column("discount_type_id")]
     public int? DiscountTypeId { get; set; }
 
+    /// <summary>The total amount moved by this transaction (equals FinalFare for payments).</summary>
     [Column("amount")]
     public decimal Amount { get; set; }
 
+    /// <summary>The kind of movement: PAYMENT, TOP_UP, REFUND, or FARE.</summary>
     [Column("transaction_type")]
     public TransactionType TransactionType { get; set; }
 
+    /// <summary>Human-readable name describing the transaction (e.g., "Fare payment: A → B").</summary>
     [Column("transaction_name")]
     public string TransactionName { get; set; } = string.Empty;
 
@@ -159,24 +169,41 @@ public class Transaction
     [MaxLength(50)]
     public string? PaymentMode { get; set; }
 
+    /// <summary>When the transaction was created (UTC).</summary>
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>When the transaction was last updated.</summary>
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>Soft-delete timestamp. Null while the record is live.</summary>
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 
+    /// <summary>EF Core optimistic concurrency token.</summary>
     [ConcurrencyCheck]
     [Column("row_version")]
     public byte[]? RowVersion { get; set; }
 
+    /// <summary>Navigation property to the card involved.</summary>
     public Card? Card { get; set; }
+
+    /// <summary>Navigation property to the driver who processed the payment.</summary>
     public User? Driver { get; set; }
+
+    /// <summary>Navigation property to the trip the payment belongs to.</summary>
     public Trip? Trip { get; set; }
+
+    /// <summary>Navigation property to the destination terminal.</summary>
     public Terminal? Terminal { get; set; }
+
+    /// <summary>Navigation property to the origin terminal.</summary>
     public Terminal? OriginTerminal { get; set; }
+
+    /// <summary>Navigation property to the fare rule applied.</summary>
     public FareRule? FareRule { get; set; }
+
+    /// <summary>Navigation property to the discount type applied (if any).</summary>
     public DiscountType? DiscountType { get; set; }
 }

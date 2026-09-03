@@ -1,6 +1,11 @@
 import { api } from './api';
 import { authService } from './auth';
 
+/**
+ * A planned journey between two terminals with its locked-in fare
+ * breakdown. A plan stays Active until it is used, cancelled by the
+ * passenger, or expired (24 hours after creation).
+ */
 export interface TripPlan {
   planId: number;
   cardId: number;
@@ -18,6 +23,7 @@ export interface TripPlan {
   finalFarePrice: number;
 }
 
+/** Fare quote for a route including the passenger's discount breakdown. */
 export interface FareCalculation {
   normalFare: number;
   discountPercentage: number | null;
@@ -25,15 +31,23 @@ export interface FareCalculation {
   finalFare: number;
 }
 
+/** Payload for creating a trip plan between two terminals. */
 export interface CreateTripPlanRequest {
   originTerminalId: number;
   destinationTerminalId: number;
 }
 
+/** Payload for changing the destination of an existing trip plan. */
 export interface UpdateTripPlanDestinationRequest {
   newDestinationTerminalId: number;
 }
 
+/**
+ * Trip planning service for the passenger app.
+ *
+ * Plans lock in the fare at creation time; only one plan can be active at
+ * a time — creating a new plan cancels and replaces the previous one.
+ */
 export const tripPlanService = {
   /**
    * Creates a new trip plan for the authenticated passenger.
@@ -106,7 +120,7 @@ export const tripPlanService = {
   },
 
   /**
-   * Gets the authenticated passenger's trip plan history.
+   * Changes the destination of an existing trip plan and re-quotes the fare.
    */
   async updateTripPlanDestination(planId: number, newDestinationTerminalId: number): Promise<TripPlan> {
     const token = await authService.getToken();

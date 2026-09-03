@@ -1,3 +1,9 @@
+/**
+ * Create/edit form for discount types (name, percentage, approval policy).
+ *
+ * `requiresApproval` toggles whether passengers must submit an application
+ * that an admin reviews before the discount takes effect.
+ */
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { Btn } from '../AdminApp'

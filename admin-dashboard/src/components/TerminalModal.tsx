@@ -1,3 +1,9 @@
+/**
+ * Create/edit form for bus terminals.
+ *
+ * The terminal selector only appears when editing an existing terminal
+ * (`initialData` present); creation only needs a name.
+ */
 import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'

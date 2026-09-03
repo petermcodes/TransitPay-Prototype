@@ -10,6 +10,9 @@ using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Discount lifecycle endpoints (Admin CRUD + approval workflow, passenger applications).
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -19,6 +22,9 @@ public class DiscountController : ControllerBase
     private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<DiscountController> _logger;
 
+    /// <summary>
+    /// Creates a new DiscountController.
+    /// </summary>
     public DiscountController(IDiscountService discountService, TransitPayDbContext dbContext, ILogger<DiscountController> logger)
     {
         _discountService = discountService;
@@ -971,17 +977,21 @@ public class DiscountController : ControllerBase
 /// </summary>
 public class CreateDiscountTypeRequest
 {
+    /// <summary>The discount name (e.g., "Student", "Senior").</summary>
     [Required(ErrorMessage = "Name is required.")]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>A description of eligibility/terms.</summary>
     [MaxLength(500)]
     public string? Description { get; set; }
 
+    /// <summary>The discount percentage (0–100).</summary>
     [Required(ErrorMessage = "Discount percentage is required.")]
     [Range(0, 100, ErrorMessage = "Discount percentage must be between 0 and 100.")]
     public decimal DiscountPercentage { get; set; }
 
+    /// <summary>Whether applications for this type require admin approval.</summary>
     public bool RequiresApproval { get; set; } = true;
 }
 
@@ -990,17 +1000,21 @@ public class CreateDiscountTypeRequest
 /// </summary>
 public class UpdateDiscountTypeRequest
 {
+    /// <summary>The discount name (e.g., "Student", "Senior").</summary>
     [Required(ErrorMessage = "Name is required.")]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>A description of eligibility/terms.</summary>
     [MaxLength(500)]
     public string? Description { get; set; }
 
+    /// <summary>The discount percentage (0–100).</summary>
     [Required(ErrorMessage = "Discount percentage is required.")]
     [Range(0, 100, ErrorMessage = "Discount percentage must be between 0 and 100.")]
     public decimal DiscountPercentage { get; set; }
 
+    /// <summary>Whether applications for this type require admin approval.</summary>
     public bool RequiresApproval { get; set; } = true;
 }
 
@@ -1009,12 +1023,15 @@ public class UpdateDiscountTypeRequest
 /// </summary>
 public class ApplyForDiscountRequest
 {
+    /// <summary>The card being applied for the discount.</summary>
     [Required(ErrorMessage = "Card ID is required.")]
     public int CardId { get; set; }
 
+    /// <summary>The discount type being applied for.</summary>
     [Required(ErrorMessage = "Discount type ID is required.")]
     public int DiscountTypeId { get; set; }
 
+    /// <summary>Optional supporting document identifier uploaded by the passenger.</summary>
     [MaxLength(500)]
     public string? DiscountDocument { get; set; }
 }
@@ -1024,6 +1041,7 @@ public class ApplyForDiscountRequest
 /// </summary>
 public class RejectDiscountApplicationRequest
 {
+    /// <summary>Optional reason for the rejection (shown to the passenger).</summary>
     [MaxLength(500)]
     public string? RejectionReason { get; set; }
 }
@@ -1033,17 +1051,21 @@ public class RejectDiscountApplicationRequest
 /// </summary>
 public class CreateDiscountProgramRequest
 {
+    /// <summary>The program name (e.g., "Student", "Senior").</summary>
     [Required(ErrorMessage = "Name is required.")]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>A description of eligibility/terms.</summary>
     [MaxLength(500)]
     public string? Description { get; set; }
 
+    /// <summary>The discount percentage (0–100).</summary>
     [Required(ErrorMessage = "Discount percentage is required.")]
     [Range(0, 100, ErrorMessage = "Discount percentage must be between 0 and 100.")]
     public decimal DiscountPercentage { get; set; }
 
+    /// <summary>Whether applications for this program require admin approval.</summary>
     public bool RequiresApproval { get; set; } = true;
 }
 
@@ -1052,17 +1074,21 @@ public class CreateDiscountProgramRequest
 /// </summary>
 public class UpdateDiscountProgramRequest
 {
+    /// <summary>The program name (e.g., "Student", "Senior").</summary>
     [Required(ErrorMessage = "Name is required.")]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>A description of eligibility/terms.</summary>
     [MaxLength(500)]
     public string? Description { get; set; }
 
+    /// <summary>The discount percentage (0–100).</summary>
     [Required(ErrorMessage = "Discount percentage is required.")]
     [Range(0, 100, ErrorMessage = "Discount percentage must be between 0 and 100.")]
     public decimal DiscountPercentage { get; set; }
 
+    /// <summary>Whether applications for this program require admin approval.</summary>
     public bool RequiresApproval { get; set; } = true;
 }
 

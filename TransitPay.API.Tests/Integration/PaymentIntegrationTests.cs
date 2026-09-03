@@ -6,6 +6,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests.Integration;
 
+/// <summary>
+/// Integration tests for conductor payments (QR and physical card) through the
+/// full HTTP pipeline, including idempotency and insufficient-balance paths.
+/// </summary>
 public class PaymentIntegrationTests : TestBase
 {
     public PaymentIntegrationTests(TestWebApplicationFactory factory) : base(factory) { }

@@ -8,9 +8,11 @@ namespace TransitPay.API.DTOs.Payment;
 /// </summary>
 public class ScanQRRequest
 {
+    /// <summary>The base64url-encoded QR payload.</summary>
     [Required(ErrorMessage = "QR data is required.")]
     public string QRData { get; set; } = string.Empty;
 
+    /// <summary>The HMAC-SHA256 signature of the QR payload.</summary>
     [Required(ErrorMessage = "Signature is required.")]
     public string Signature { get; set; } = string.Empty;
 }

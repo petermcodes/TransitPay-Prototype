@@ -9,6 +9,11 @@ using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Trip lifecycle endpoints for the driver app: start/end/cancel trips, update the
+/// current boarding origin, and query trip history. Drivers may only manage their own
+/// trips; Admins may manage any trip.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Driver,Admin")]
@@ -18,6 +23,9 @@ public class TripController : ControllerBase
     private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<TripController> _logger;
 
+    /// <summary>
+    /// Creates a new TripController.
+    /// </summary>
     public TripController(ITripService tripService, TransitPayDbContext dbContext, ILogger<TripController> logger)
     {
         _tripService = tripService;
@@ -352,8 +360,10 @@ public class TripController : ControllerBase
 /// </summary>
 public class StartTripRequest
 {
+    /// <summary>Optional boarding terminal for the trip route.</summary>
     public int? OriginTerminalId { get; set; }
 
+    /// <summary>Optional final destination terminal for the trip route.</summary>
     public int? FinalDestinationTerminalId { get; set; }
 }
 
@@ -362,6 +372,7 @@ public class StartTripRequest
 /// </summary>
 public class UpdateBoardingOriginRequest
 {
+    /// <summary>The new current boarding origin terminal ID.</summary>
     [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Origin terminal ID is required.")]
     [System.ComponentModel.DataAnnotations.Range(1, int.MaxValue, ErrorMessage = "Invalid origin terminal ID.")]
     public int OriginTerminalId { get; set; }

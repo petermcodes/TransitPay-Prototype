@@ -7,12 +7,24 @@ using TransitPay.API.Models;
 
 namespace TransitPay.API.Services;
 
+/// <summary>
+/// Service for managing passenger Trip Plans.
+/// Creates, reads, updates, and cancels the active journey plan that a passenger
+/// sets up before boarding. The fare is locked in at plan creation/update time by
+/// the shared <see cref="FareCalculator"/>, and the stored fare breakdown is what the
+/// conductor payment flow charges — so the charged amount always matches what the
+/// passenger was quoted. Plans expire 24 hours after creation or update.
+/// </summary>
 public class TripPlanService : ITripPlanService
 {
     private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<TripPlanService> _logger;
     private readonly FareCalculator _fareCalculator;
 
+    /// <summary>
+    /// Creates a new TripPlanService. The shared <see cref="FareCalculator"/> is injected
+    /// so fare calculation stays as a single source of truth.
+    /// </summary>
     public TripPlanService(TransitPayDbContext dbContext, ILogger<TripPlanService> logger, FareCalculator fareCalculator)
     {
         _dbContext = dbContext;
@@ -20,6 +32,7 @@ public class TripPlanService : ITripPlanService
         _fareCalculator = fareCalculator;
     }
 
+    /// <inheritdoc />
     public async Task<TripPlan> CreateTripPlanAsync(int userId, int cardId, int originTerminalId, int destinationTerminalId)
     {
         // Cancel any existing active plan for this user and card
@@ -72,6 +85,7 @@ public class TripPlanService : ITripPlanService
         return plan;
     }
 
+    /// <inheritdoc />
     public async Task<TripPlan?> GetActiveTripPlanAsync(int userId, int cardId)
     {
         return await _dbContext.TripPlans
@@ -80,6 +94,7 @@ public class TripPlanService : ITripPlanService
             .FirstOrDefaultAsync(tp => tp.UserId == userId && tp.CardId == cardId && tp.Status == "Active");
     }
 
+    /// <inheritdoc />
     public async Task<TripPlan?> GetTripPlanByIdAsync(int planId, int userId, int cardId)
     {
         return await _dbContext.TripPlans
@@ -88,6 +103,7 @@ public class TripPlanService : ITripPlanService
             .FirstOrDefaultAsync(tp => tp.PlanId == planId && tp.UserId == userId && tp.CardId == cardId);
     }
 
+    /// <inheritdoc />
     public async Task<IEnumerable<TripPlan>> GetTripPlanHistoryAsync(int userId, int cardId)
     {
         return await _dbContext.TripPlans
@@ -98,6 +114,7 @@ public class TripPlanService : ITripPlanService
             .ToListAsync();
     }
 
+    /// <inheritdoc />
     public async Task<TripPlan?> UpdateTripPlanDestinationAsync(int planId, int newDestinationTerminalId)
     {
         var plan = await _dbContext.TripPlans
@@ -130,6 +147,7 @@ public class TripPlanService : ITripPlanService
         return plan;
     }
 
+    /// <inheritdoc />
     public async Task<bool> CancelTripPlanAsync(int planId)
     {
         var plan = await _dbContext.TripPlans
