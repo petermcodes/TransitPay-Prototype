@@ -38,4 +38,13 @@ public interface IGcashTopUpService
     /// sessions), or null when the session does not exist or belongs to another user.
     /// </summary>
     Task<GcashTopUpSessionResult?> GetStatusAsync(Guid sessionId, int userId);
+
+    /// <summary>
+    /// Returns the currently open (PENDING, non-expired) checkout session for a card,
+    /// or null when there is nothing to resume. Used by the app to offer continuing an
+    /// interrupted payment after the app was closed or crashed mid-checkout. Stale
+    /// sessions are lazily expired. Throws <see cref="InvalidOperationException"/> when
+    /// the wallet does not exist or is not owned by <paramref name="userId"/>.
+    /// </summary>
+    Task<GcashTopUpSessionResult?> GetActiveSessionAsync(int cardId, int userId);
 }

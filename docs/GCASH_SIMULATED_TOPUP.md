@@ -45,6 +45,27 @@ The pending `TOP_UP` transaction appears in transaction history while the checko
 is open (rendered with the existing `pending` status chip), giving an audit trail
 that matches what a real gateway integration would produce.
 
+### Resuming an interrupted payment
+
+If the app is closed or crashes mid-checkout, the session stays `PENDING`
+server-side. The next time the passenger opens the Top Up screen, the app queries
+`GET /api/topup/gcash/active/{cardId}` and shows a **resume banner** with
+*Continue payment* (re-opens the checkout for the original session, keeping the
+original TRN) and *Cancel payment* (voids the session → `CANCELLED`).
+
+Two invariants keep this clean:
+
+- **Lazy expiry** — a session that expired while the app was closed is marked
+  `EXPIRED` (transaction → `CANCELLED`) on the next active-session lookup, so it is
+  never offered for resume.
+- **Single active session per card** — starting a fresh top-up auto-cancels any
+  still-open session, so at most one checkout per card is ever open.
+
+Wallet stats on the My Wallet screen ("Total Top Up" / "Total Spent") count only
+`COMPLETED` transactions, so abandoned or failed checkouts never inflate the totals
+(see `computeWalletStats` in `passenger-android/src/lib/wallet.ts` and
+`passenger-app/src/lib/wallet.ts`).
+
 ## API endpoints (`TopUpController`, passenger JWT required, ownership enforced)
 
 | Method | Route | Body | Notes |
@@ -53,6 +74,7 @@ that matches what a real gateway integration would produce.
 | POST | `/api/topup/gcash/confirm` | `{ sessionId, otp }` | Sandbox OTP is `123456`; 3 wrong attempts → `FAILED` |
 | POST | `/api/topup/gcash/cancel` | `{ sessionId }` | Voids a pending session |
 | GET | `/api/topup/gcash/status/{sessionId}` | — | Status polling; lazily expires stale sessions |
+| GET | `/api/topup/gcash/active/{cardId}` | — | Open session for a card — used to **resume** an interrupted payment; null data when none |
 
 All endpoints return the standard `{ success, message, data }` envelope.
 Postman requests live in `postman/collections/TransitPay API/Top Up/`.

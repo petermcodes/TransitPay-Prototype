@@ -49,6 +49,9 @@ export interface WalletStats {
 /**
  * Computes wallet statistics (Total Top Up / Total Spent) from a list of
  * transactions. Values are derived from the live API data — never fabricated.
+ * Only COMPLETED transactions are counted: PENDING / FAILED / CANCELLED / EXPIRED
+ * movements (e.g., an abandoned GCash checkout) never touch the totals. Legacy
+ * rows without a status are treated as completed.
  */
 export function computeWalletStats(transactions: Transaction[]): WalletStats {
   const now = new Date();
@@ -60,6 +63,9 @@ export function computeWalletStats(transactions: Transaction[]): WalletStats {
   for (const tx of transactions) {
     const createdAt = new Date(tx.createdAt);
     if (createdAt < startOfMonth) continue;
+
+    const status = (tx.status || 'completed').toLowerCase();
+    if (status !== 'completed') continue;
 
     const type = tx.transactionType.toLowerCase();
     if (type === 'top_up' || type === 'topup') {
