@@ -8,6 +8,9 @@ using TransitPay.API.Models;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Fare matrix (FareRule) management endpoints (Admin only).
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Admin")]
@@ -15,11 +18,17 @@ public class FareRuleController : ControllerBase
 {
     private readonly TransitPayDbContext _dbContext;
 
+    /// <summary>
+    /// Creates a new FareRuleController.
+    /// </summary>
     public FareRuleController(TransitPayDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    /// <summary>
+    /// Retrieves all non-deleted fare rules with terminal names (Admin only).
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetFareRules()
     {
@@ -42,6 +51,10 @@ public class FareRuleController : ControllerBase
         return Ok(new { success = true, message = "Fare rules retrieved successfully.", data = fareRules });
     }
 
+    /// <summary>
+    /// Creates a new fare rule (Admin only). New rules default to BUS/Passenger types
+    /// and start active with today's effective date.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> CreateFareRule([FromBody] FareRuleCreateRequest request)
     {
@@ -67,16 +80,23 @@ public class FareRuleController : ControllerBase
     }
 }
 
+/// <summary>
+/// Request DTO for creating a fare matrix entry.
+/// </summary>
 public class FareRuleCreateRequest
 {
+    /// <summary>The boarding terminal ID.</summary>
     [Required(ErrorMessage = "Origin terminal ID is required.")]
     public int OriginTerminalId { get; set; }
 
+    /// <summary>The alighting terminal ID.</summary>
     [Required(ErrorMessage = "Destination terminal ID is required.")]
     public int DestinationTerminalId { get; set; }
 
+    /// <summary>The fare amount charged for this route.</summary>
     [Range(0.01, 10000, ErrorMessage = "Fare amount must be greater than 0.")]
     public decimal FareAmount { get; set; }
 
+    /// <summary>The date from which this fare rule takes effect.</summary>
     public DateTime EffectiveDate { get; set; } = DateTime.UtcNow;
 }

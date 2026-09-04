@@ -1,3 +1,7 @@
+/**
+ * Lightweight loading indicator used across the dashboard (buttons, cards, tables).
+ * Renders an accessible animated ring; size can be tuned per usage site.
+ */
 interface SpinnerProps {
   size?: 'sm' | 'md' | 'lg'
   className?: string

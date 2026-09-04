@@ -1,6 +1,7 @@
 import { api } from './api';
 import { authService } from './auth';
 
+/** Stored-value wallet attached to a TransitPay card. */
 export interface Wallet {
   walletId: number;
   cardId: number;
@@ -10,12 +11,14 @@ export interface Wallet {
   updatedAt?: string;
 }
 
+/** Payload for crediting a wallet. */
 export interface TopUpRequest {
   cardId: number;
   amount: number;
   paymentMode?: string;
 }
 
+/** A wallet movement (top-up or fare payment) with route and payment context. */
 export interface Transaction {
   transactionId: number;
   cardId: number;
@@ -37,6 +40,7 @@ export interface Transaction {
   createdAt: string;
 }
 
+/** Month-to-date totals shown on the wallet screen. */
 export interface WalletStats {
   totalTopUp: number;
   totalSpent: number;
@@ -68,7 +72,9 @@ export function computeWalletStats(transactions: Transaction[]): WalletStats {
   return { totalTopUp, totalSpent };
 }
 
+/** Wallet operations: balance lookup, top-up and paged transaction history. */
 export const walletService = {
+  /** Fetches the wallet (balance and status) for a card. */
   async getWallet(cardId: number): Promise<Wallet> {
     const token = await authService.getToken();
     const response = await api.get<{ success: boolean; data: Wallet; message?: string }>(
@@ -80,6 +86,7 @@ export const walletService = {
     return response.data;
   },
 
+  /** Credits the wallet and returns the updated wallet record. */
   async topUp(cardId: number, amount: number, paymentMode?: string): Promise<Wallet> {
     const token = await authService.getToken();
     const response = await api.post<{ success: boolean; data: Wallet; message?: string }>(
@@ -92,6 +99,7 @@ export const walletService = {
     return response.data;
   },
 
+  /** Fetches one page of the card's transaction history. */
   async getTransactions(cardId: number, page = 1, pageSize = 20): Promise<{
     data: Transaction[];
     pagination: { page: number; pageSize: number; total: number; totalPages: number };

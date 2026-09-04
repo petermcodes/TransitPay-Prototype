@@ -15,6 +15,9 @@ public class DiscountService : IDiscountService
     private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<DiscountService> _logger;
 
+    /// <summary>
+    /// Creates a new DiscountService.
+    /// </summary>
     public DiscountService(TransitPayDbContext dbContext, ILogger<DiscountService> logger)
     {
         _dbContext = dbContext;

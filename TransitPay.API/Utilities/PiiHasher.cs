@@ -10,6 +10,12 @@ namespace TransitPay.API.Utilities;
 /// </summary>
 public static class PiiHasher
 {
+    /// <summary>
+    /// Computes a stable SHA-256 hex digest (lowercase) of the input value.
+    /// Returns <see cref="string.Empty"/> for null or whitespace input.
+    /// </summary>
+    /// <param name="input">The plaintext value to hash (e.g., a mobile number).</param>
+    /// <returns>The lowercase SHA-256 hex digest, or an empty string.</returns>
     public static string Sha256Hex(string input)
     {
         if (string.IsNullOrWhiteSpace(input))

@@ -3,6 +3,10 @@ using TransitPay.API.Services;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Fare calculation endpoints. Uses the shared <see cref="FareCalculator"/> so the
+/// fare quote always matches what the payment flow actually charges.
+/// </summary>
 [ApiController]
 [Route("api/fare")]
 public class FareController : ControllerBase
@@ -10,6 +14,9 @@ public class FareController : ControllerBase
     private readonly FareCalculator _fareCalculator;
     private readonly ILogger<FareController> _logger;
 
+    /// <summary>
+    /// Creates a new FareController.
+    /// </summary>
     public FareController(FareCalculator fareCalculator, ILogger<FareController> logger)
     {
         _fareCalculator = fareCalculator;

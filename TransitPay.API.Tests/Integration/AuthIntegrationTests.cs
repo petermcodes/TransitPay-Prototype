@@ -6,6 +6,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests.Integration;
 
+/// <summary>
+/// Integration tests for the authentication flow (register, login, refresh, logout,
+/// validate) through the full HTTP pipeline.
+/// </summary>
 public class AuthIntegrationTests : TestBase
 {
     public AuthIntegrationTests(TestWebApplicationFactory factory) : base(factory) { }

@@ -5,6 +5,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests.Integration;
 
+/// <summary>
+/// Integration tests for security controls: auth rate limiting, PAN masking,
+/// ownership validation, and authorization boundaries.
+/// </summary>
 public class SecurityIntegrationTests : TestBase
 {
     public SecurityIntegrationTests(TestWebApplicationFactory factory) : base(factory) { }

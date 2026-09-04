@@ -5,6 +5,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests.Integration;
 
+/// <summary>
+/// Integration tests for the discount lifecycle (types, programs, applications,
+/// approval workflow) through the full HTTP pipeline.
+/// </summary>
 public class DiscountIntegrationTests : TestBase
 {
     public DiscountIntegrationTests(TestWebApplicationFactory factory) : base(factory) { }

@@ -385,6 +385,82 @@ namespace TransitPay.API.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TransitPay.API.Models.GcashTopUpSession", b =>
+                {
+                    b.Property<Guid>("SessionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric")
+                        .HasColumnName("amount");
+
+                    b.Property<int>("CardId")
+                        .HasColumnType("integer")
+                        .HasColumnName("card_id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("GcashReference")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("gcash_reference");
+
+                    b.Property<string>("MobileNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("mobile_number");
+
+                    b.Property<int>("OtpAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("otp_attempts");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TransactionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("transaction_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("SessionId");
+
+                    b.HasIndex("CardId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TransactionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("gcash_topup_sessions", (string)null);
+                });
+
             modelBuilder.Entity("TransitPay.API.Models.History.DriverDeleteHistory", b =>
                 {
                     b.Property<int>("HistoryId")
@@ -1542,6 +1618,25 @@ namespace TransitPay.API.Migrations
                     b.Navigation("DestinationTerminal");
 
                     b.Navigation("OriginTerminal");
+                });
+
+            modelBuilder.Entity("TransitPay.API.Models.GcashTopUpSession", b =>
+                {
+                    b.HasOne("TransitPay.API.Models.Card", "Card")
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TransitPay.API.Models.Transaction", "Transaction")
+                        .WithMany()
+                        .HasForeignKey("TransactionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Card");
+
+                    b.Navigation("Transaction");
                 });
 
             modelBuilder.Entity("TransitPay.API.Models.PassengerDiscount", b =>

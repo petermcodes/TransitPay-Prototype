@@ -11,6 +11,7 @@ namespace TransitPay.API.Models;
 [Table("auth_audit_logs")]
 public class AuthAuditLog
 {
+    /// <summary>Primary key.</summary>
     [Key]
     [Column("audit_id")]
     public long AuditId { get; set; }
@@ -41,6 +42,7 @@ public class AuthAuditLog
     [Column("ip_address")]
     public string? IpAddress { get; set; }
 
+    /// <summary>When the audit event was recorded (UTC).</summary>
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

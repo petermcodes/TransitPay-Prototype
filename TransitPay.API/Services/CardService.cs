@@ -20,6 +20,9 @@ public class CardService : ICardService
     private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<CardService> _logger;
 
+    /// <summary>
+    /// Creates a new CardService.
+    /// </summary>
     public CardService(TransitPayDbContext dbContext, ILogger<CardService> logger)
     {
         _dbContext = dbContext;

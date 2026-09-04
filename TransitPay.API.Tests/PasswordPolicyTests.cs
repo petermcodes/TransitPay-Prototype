@@ -3,6 +3,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests;
 
+/// <summary>
+/// Unit tests for the centralized <see cref="TransitPay.API.Utilities.PasswordPolicy"/>:
+/// complexity rules, common-password rejection, and personal-info rejection.
+/// </summary>
 public class PasswordPolicyTests
 {
     [Theory]

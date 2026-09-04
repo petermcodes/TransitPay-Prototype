@@ -25,6 +25,9 @@ public class PaymentService : IPaymentService
     private readonly IDiscountService _discountService;
     private readonly ILogger<PaymentService> _logger;
 
+    /// <summary>
+    /// Creates a new PaymentService.
+    /// </summary>
     public PaymentService(
         TransitPayDbContext dbContext,
         IQRService qrService,

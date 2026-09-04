@@ -19,6 +19,7 @@ public interface IPaymentService
     /// <param name="qrData">The base64-encoded QR payload.</param>
     /// <param name="signature">The HMAC signature of the QR payload.</param>
     /// <param name="driverId">The authenticated driver's user ID.</param>
+    /// <param name="planId">The passenger's active trip plan ID to charge (0 to auto-resolve).</param>
     /// <returns>Payment response with receipt data.</returns>
     Task<PaymentResponse> ProcessConductorPaymentAsync(
         string qrData, string signature, int driverId, int planId = 0);

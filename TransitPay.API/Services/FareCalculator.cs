@@ -13,6 +13,9 @@ public class FareCalculator
 {
     private readonly TransitPayDbContext _dbContext;
 
+    /// <summary>
+    /// Creates a new FareCalculator.
+    /// </summary>
     public FareCalculator(TransitPayDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -23,6 +26,12 @@ public class FareCalculator
     /// Looks up the active fare rule, applies the card's approved discount,
     /// and returns the full fare breakdown.
     /// </summary>
+    /// <param name="originTerminalId">The boarding terminal ID.</param>
+    /// <param name="destinationTerminalId">The alighting terminal ID.</param>
+    /// <param name="cardId">The transit card ID used to resolve the passenger's active discount.</param>
+    /// <param name="vehicleType">Optional vehicle type filter for the fare rule lookup (defaults to any).</param>
+    /// <param name="passengerType">Optional passenger type filter for the fare rule lookup (defaults to any).</param>
+    /// <returns>A <see cref="FareCalculationResult"/> with the normal fare, discount breakdown, and final fare.</returns>
     public async Task<FareCalculationResult> CalculateFareAsync(
         int originTerminalId, int destinationTerminalId, int cardId,
         VehicleType? vehicleType = null, PassengerType? passengerType = null)
@@ -87,8 +96,15 @@ public class FareCalculator
 /// </summary>
 public class FareCalculationResult
 {
+    /// <summary>The base fare from the fare matrix before any discount.</summary>
     public decimal NormalFare { get; set; }
+
+    /// <summary>The absolute discount amount, or <c>null</c> when the card has no active discount.</summary>
     public decimal? DiscountAmount { get; set; }
+
+    /// <summary>The snapshotted discount percentage, or <c>null</c> when no discount applies.</summary>
     public decimal? DiscountPercentage { get; set; }
+
+    /// <summary>The fare the passenger is actually charged (normal fare minus discount).</summary>
     public decimal FinalFare { get; set; }
 }

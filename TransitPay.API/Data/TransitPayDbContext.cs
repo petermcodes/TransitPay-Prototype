@@ -5,38 +5,108 @@ using TransitPay.API.Models.History;
 
 namespace TransitPay.API.Data;
 
+/// <summary>
+/// EF Core database context for TransitPay.
+/// Maps all domain entities to their PostgreSQL tables (snake_case), configures:
+///   - CHECK constraints (non-negative balances/fares, percentage ranges)
+///   - soft-delete query filters (DeletedAt == null)
+///   - unique / filtered-unique indexes (one active QR per card, one active plan per card, etc.)
+///   - relationship behaviours (Restrict deletes to protect audit history)
+/// Entity names are serialized via [Column] attributes; this fluent configuration layer
+/// is the single source of truth for table-level constraints that cannot be expressed
+/// with attributes alone.
+/// </summary>
 public class TransitPayDbContext : DbContext
 {
+    /// <summary>
+    /// Creates a new database context with the given options.
+    /// </summary>
+    /// <param name="options">The DbContext options (connection, provider, etc.).</param>
     public TransitPayDbContext(DbContextOptions<TransitPayDbContext> options)
         : base(options)
     {
     }
 
+    /// <summary>Application roles (Passenger, Driver, Admin).</summary>
     public DbSet<Role> Roles { get; set; }
+
+    /// <summary>User accounts (passengers, drivers, administrators).</summary>
     public DbSet<User> Users { get; set; }
+
+    /// <summary>Physical transit cards.</summary>
     public DbSet<Card> Cards { get; set; }
+
+    /// <summary>Bus terminals/stations referenced by routes and fare rules.</summary>
     public DbSet<Terminal> Terminals { get; set; }
+
+    /// <summary>Stored-value wallets bound one-to-one to cards.</summary>
     public DbSet<Wallet> Wallets { get; set; }
+
+    /// <summary>Financial transactions (fare payments and top-ups).</summary>
     public DbSet<Transaction> Transactions { get; set; }
+
+    /// <summary>Simulated GCash top-up checkout sessions (digital payment sandbox).</summary>
+    public DbSet<GcashTopUpSession> GcashTopUpSessions { get; set; }
+
+    /// <summary>Fare matrix entries (route × vehicle × passenger type → fare).</summary>
     public DbSet<FareRule> FareRules { get; set; }
+
+    /// <summary>Refresh tokens for JWT re-authentication.</summary>
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+
+    /// <summary>Permanent per-card QR codes.</summary>
     public DbSet<QRCode> QRCodes { get; set; }
+
+    /// <summary>Driver trips (journeys) that collect payments.</summary>
     public DbSet<Trip> Trips { get; set; }
+
+    /// <summary>Passenger trip plans (locked fares for a boarding route).</summary>
     public DbSet<TripPlan> TripPlans { get; set; }
+
+    /// <summary>Configurable discount types.</summary>
     public DbSet<DiscountType> DiscountTypes { get; set; }
+
+    /// <summary>Passenger discount applications (approval workflow).</summary>
     public DbSet<DiscountApplication> DiscountApplications { get; set; }
+
+    /// <summary>Configurable discount programs.</summary>
     public DbSet<DiscountProgram> DiscountPrograms { get; set; }
+
+    /// <summary>Materialized discounts assigned to cards.</summary>
     public DbSet<PassengerDiscount> PassengerDiscounts { get; set; }
+
+    /// <summary>PII-minimized authentication event audit log.</summary>
     public DbSet<AuthAuditLog> AuthAuditLogs { get; set; }
+
+    /// <summary>Audit trail of passenger edits.</summary>
     public DbSet<PassengerEditHistory> PassengerEditHistories { get; set; }
+
+    /// <summary>Audit trail of passenger deletions.</summary>
     public DbSet<PassengerDeleteHistory> PassengerDeleteHistories { get; set; }
+
+    /// <summary>Audit trail of driver edits.</summary>
     public DbSet<DriverEditHistory> DriverEditHistories { get; set; }
+
+    /// <summary>Audit trail of driver deletions.</summary>
     public DbSet<DriverDeleteHistory> DriverDeleteHistories { get; set; }
+
+    /// <summary>Audit trail of terminal edits.</summary>
     public DbSet<TerminalEditHistory> TerminalEditHistories { get; set; }
+
+    /// <summary>Audit trail of terminal deletions.</summary>
     public DbSet<TerminalDeleteHistory> TerminalDeleteHistories { get; set; }
+
+    /// <summary>Audit trail of fare matrix edits.</summary>
     public DbSet<FareMatrixEditHistory> FareMatrixEditHistories { get; set; }
+
+    /// <summary>Audit trail of fare matrix deletions.</summary>
     public DbSet<FareMatrixDeleteHistory> FareMatrixDeleteHistories { get; set; }
 
+    /// <summary>
+    /// Configures the EF Core model: table mappings, indexes, constraints,
+    /// soft-delete query filters, and relationships. See the section banners
+    /// below for each concern area.
+    /// </summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -67,9 +137,12 @@ public class TransitPayDbContext : DbContext
         modelBuilder.Entity<FareMatrixEditHistory>().ToTable("fare_matrix_edit_history");
         modelBuilder.Entity<FareMatrixDeleteHistory>().ToTable("fare_matrix_delete_history");
 
+        modelBuilder.Entity<GcashTopUpSession>().ToTable("gcash_topup_sessions");
+
         modelBuilder.Entity<Wallet>().Property(w => w.RowVersion).IsRowVersion();
         modelBuilder.Entity<Trip>().Property(t => t.RowVersion).IsRowVersion();
         modelBuilder.Entity<Transaction>().Property(t => t.RowVersion).IsRowVersion();
+        modelBuilder.Entity<GcashTopUpSession>().Property(s => s.RowVersion).IsRowVersion();
 
         // ── Database integrity CHECK constraints ────────────────────────
         modelBuilder.Entity<Wallet>()
@@ -435,6 +508,29 @@ public class TransitPayDbContext : DbContext
         modelBuilder.Entity<Wallet>()
             .HasIndex(w => w.CardId)
             .IsUnique();
+
+        // ── GcashTopUpSession relationships & indexes ─────────────────────
+        // Restrict deletes so gateway/audit history survives card or transaction cleanup
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasOne(s => s.Card)
+            .WithMany()
+            .HasForeignKey(s => s.CardId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasOne(s => s.Transaction)
+            .WithMany()
+            .HasForeignKey(s => s.TransactionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasIndex(s => s.CardId);
+
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasIndex(s => s.UserId);
+
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasIndex(s => s.Status);
 
         // ── History table indexes ─────────────────────────────────────────
         modelBuilder.Entity<PassengerEditHistory>()

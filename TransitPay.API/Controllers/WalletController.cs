@@ -10,6 +10,9 @@ using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Wallet endpoints: balance lookup (ownership-scoped) and admin top-ups.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -18,12 +21,19 @@ public class WalletController : ControllerBase
     private readonly TransitPayDbContext _dbContext;
     private readonly ITransactionReferenceNumberGenerator _trnGenerator;
 
+    /// <summary>
+    /// Creates a new WalletController.
+    /// </summary>
     public WalletController(TransitPayDbContext dbContext, ITransactionReferenceNumberGenerator trnGenerator)
     {
         _dbContext = dbContext;
         _trnGenerator = trnGenerator;
     }
 
+    /// <summary>
+    /// Retrieves the wallet balance for a card.
+    /// Passengers may only access wallets of cards they own; Admins may access any wallet.
+    /// </summary>
     [HttpGet("{cardId}")]
     public async Task<IActionResult> GetWallet(int cardId)
     {
@@ -62,6 +72,10 @@ public class WalletController : ControllerBase
         }});
     }
 
+    /// <summary>
+    /// Adds funds to a card's wallet (Admin only). A TOP_UP transaction record with a
+    /// generated Transaction Reference Number is written for the audit trail.
+    /// </summary>
     [HttpPost("topup")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> TopUp([FromBody] TopUpRequest request)
@@ -104,11 +118,16 @@ public class WalletController : ControllerBase
     }
 }
 
+/// <summary>
+/// Request DTO for an admin wallet top-up.
+/// </summary>
 public class TopUpRequest
 {
+    /// <summary>The card whose wallet will be topped up.</summary>
     [Required(ErrorMessage = "Card ID is required.")]
     public int CardId { get; set; }
 
+    /// <summary>The amount to add to the wallet balance (1 to 100,000).</summary>
     [Range(1, 100000, ErrorMessage = "Amount must be between 1 and 100,000.")]
     public decimal Amount { get; set; }
 

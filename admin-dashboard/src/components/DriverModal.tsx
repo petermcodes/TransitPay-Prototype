@@ -1,3 +1,10 @@
+/**
+ * "Add New Driver" form modal.
+ *
+ * Validates input client-side (names, 11-digit mobile number, vehicle and
+ * plate number) and delegates creation to the parent via `onSubmit`. The
+ * server assigns the Driver ID, which doubles as the default password.
+ */
 import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'

@@ -1,0 +1,33 @@
+$kind: http-request
+name: Confirm GCash Top Up
+method: POST
+url: '{{baseUrl}}/api/topup/gcash/confirm'
+order: 2200
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "sessionId": "{{gcashSessionId}}",
+      "otp": "123456"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Payment completed and wallet credited", function () {
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data.sessionStatus).to.eql("COMPLETED");
+          pm.expect(json.data.newBalance).to.be.above(0);
+      });

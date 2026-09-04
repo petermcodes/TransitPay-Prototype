@@ -1,3 +1,10 @@
+/**
+ * Discount type management screen.
+ *
+ * Lists all discount types with search and active/inactive filtering, and
+ * exposes activate/deactivate/delete actions plus the add/edit modal
+ * (opened via `onAddDiscountType` handled by AdminApp).
+ */
 import { useState, useEffect } from 'react'
 import { Search, Plus, Eye, Edit2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { adminService } from '../lib/admin'

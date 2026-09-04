@@ -23,6 +23,9 @@ public class PaymentController : ControllerBase
     private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<PaymentController> _logger;
 
+    /// <summary>
+    /// Creates a new PaymentController.
+    /// </summary>
     public PaymentController(
         IPaymentService paymentService,
         IQRService qrService,
@@ -243,6 +246,7 @@ public class PaymentController : ControllerBase
 /// </summary>
 public class GenerateQRRequest
 {
+    /// <summary>The transit card ID whose QR code is requested.</summary>
     [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Card ID is required.")]
     public int CardId { get; set; }
 }

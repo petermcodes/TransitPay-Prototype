@@ -6,6 +6,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests;
 
+/// <summary>
+/// Verifies that EF Core model metadata exposes the expected business-key uniqueness
+/// rules (discount type name, terminal name, etc.) from the DbContext configuration.
+/// </summary>
 public class SchemaUniquenessMetadataTests
 {
     private static TransitPayDbContext CreateContext()

@@ -1,3 +1,9 @@
+/**
+ * Reusable modal dialog.
+ *
+ * Renders a centered overlay with a title bar and scrollable body. Locks
+ * body scrolling while open and closes when the overlay/backdrop is clicked.
+ */
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 

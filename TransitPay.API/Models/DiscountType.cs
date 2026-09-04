@@ -10,6 +10,7 @@ namespace TransitPay.API.Models;
 [Table("discount_types")]
 public class DiscountType
 {
+    /// <summary>Primary key.</summary>
     [Key]
     [Column("discount_type_id")]
     public int DiscountTypeId { get; set; }
@@ -50,12 +51,15 @@ public class DiscountType
     [Column("requires_approval")]
     public bool RequiresApproval { get; set; } = true;
 
+    /// <summary>When the discount type was created (UTC).</summary>
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>When the discount type was last updated.</summary>
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>Soft-delete timestamp. Null while the record is live.</summary>
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 

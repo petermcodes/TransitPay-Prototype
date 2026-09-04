@@ -18,6 +18,9 @@ public class DriverController : ControllerBase
     private readonly IAdminService _adminService;
     private readonly ILogger<DriverController> _logger;
 
+    /// <summary>
+    /// Creates a new DriverController.
+    /// </summary>
     public DriverController(IAdminService adminService, ILogger<DriverController> logger)
     {
         _adminService = adminService;

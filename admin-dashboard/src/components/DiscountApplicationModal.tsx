@@ -1,3 +1,9 @@
+/**
+ * Confirmation dialog for approving or rejecting a discount application.
+ *
+ * In `approve` mode it shows the consequence of approval; in `reject` mode it
+ * requires a reason, which is relayed to the applicant.
+ */
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { Btn } from '../AdminApp'

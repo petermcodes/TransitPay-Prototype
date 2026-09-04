@@ -1,3 +1,9 @@
+/**
+ * Historical trips screen (read-only).
+ *
+ * Paginated table of all trips with status filtering (Pending/Active/
+ * Completed/Cancelled) and search by driver, route or trip ID.
+ */
 import { useState, useEffect } from 'react'
 import { Search } from 'lucide-react'
 import { adminService } from '../lib/admin'

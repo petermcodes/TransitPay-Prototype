@@ -21,6 +21,9 @@ public class TripService : ITripService
     private readonly TransitPayDbContext _dbContext;
     private readonly ILogger<TripService> _logger;
 
+    /// <summary>
+    /// Creates a new TripService.
+    /// </summary>
     public TripService(TransitPayDbContext dbContext, ILogger<TripService> logger)
     {
         _dbContext = dbContext;

@@ -10,6 +10,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests;
 
+/// <summary>
+/// Security tests for the QR ticket system: signature verification, tamper rejection,
+/// and payload structure constraints.
+/// </summary>
 public class QRSecurityTests
 {
     private static TransitPayDbContext CreateContext()

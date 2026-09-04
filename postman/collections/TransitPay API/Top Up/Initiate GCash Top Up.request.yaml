@@ -1,0 +1,38 @@
+$kind: http-request
+name: Initiate GCash Top Up
+method: POST
+url: '{{baseUrl}}/api/topup/gcash/initiate'
+order: 2100
+headers:
+  - key: Content-Type
+    value: application/json
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "cardId": "{{cardId}}",
+      "amount": 100
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Session is created pending", function () {
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data).to.have.property("sessionId");
+          pm.expect(json.data.status).to.eql("PENDING");
+          pm.collectionVariables.set("gcashSessionId", json.data.sessionId);
+      });
+      pm.test("Transaction reference number is generated", function () {
+          const json = pm.response.json();
+          pm.expect(json.data.transactionReferenceNumber).to.match(/^TNR-/);
+      });

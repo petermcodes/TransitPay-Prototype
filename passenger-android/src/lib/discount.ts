@@ -1,6 +1,7 @@
 import { api } from './api';
 import { authService } from './auth';
 
+/** A discount program offered by the system (e.g. Student, Senior, PWD). */
 export interface DiscountType {
   discountTypeId: number;
   name: string;
@@ -10,6 +11,7 @@ export interface DiscountType {
   requiresApproval: boolean;
 }
 
+/** A passenger's application for a discount program, with its review status. */
 export interface DiscountApplication {
   discountApplicationId: number;
   cardId: number;
@@ -45,12 +47,20 @@ export function getDiscountStatusName(status: string): string {
   return DISCOUNT_STATUS[status] || 'Pending';
 }
 
+/** Payload for submitting a discount application, optionally with a supporting document. */
 export interface DiscountApplicationRequest {
   cardId: number;
   discountTypeId: number;
   discountDocument?: string;
 }
 
+/**
+ * Discount service for the passenger app.
+ *
+ * Lets passengers browse discount programs, submit applications with
+ * supporting documents, and read back their application history and
+ * currently-active discount (used for the card theme).
+ */
 export const discountService = {
   /**
    * Get all available discount types

@@ -1,3 +1,13 @@
+/**
+ * Admin dashboard root application.
+ *
+ * Single-file shell composing the admin UI: shared primitives (Chip, Btn,
+ * KpiCard), sidebar/topbar navigation, and the per-section views (dashboard,
+ * passengers, drivers, terminals, fare matrix, transactions, reports,
+ * settings, trips, discount management, live trip monitoring). The root
+ * `AdminApp` component (bottom) owns the login gate and the data-mutating
+ * handlers (terminal/driver/fare-rule CRUD) that back the child views.
+ */
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users, Bus, Map,
@@ -21,6 +31,7 @@ import { DiscountApplicationsView } from './views/DiscountApplicationsView'
 import { TripMonitoringView } from './views/TripMonitoringView'
 import { PassengerDiscountsView } from './views/PassengerDiscountsView'
 
+/** Top-level navigation sections selectable in the sidebar. */
 type AdminSection =
   | 'dashboard' | 'users' | 'drivers' | 'terminals'
   | 'fare-matrix' | 'transactions' | 'reports' | 'settings'
@@ -28,6 +39,7 @@ type AdminSection =
 
 // ── Shared ─────────────────────────────────────────────────────────────────────
 
+/** Small pill-shaped status/label badge used across all admin views. */
 export function Chip({ label, variant = 'default' }: { label: string; variant?: 'success' | 'warning' | 'danger' | 'info' | 'default' }) {
   const map = {
     success: 'bg-green-50 text-green-700 border border-green-200',
@@ -39,6 +51,7 @@ export function Chip({ label, variant = 'default' }: { label: string; variant?: 
   return <span className={`chip ${map[variant]}`}>{label}</span>
 }
 
+/** Shared button component with size/variant styles used by every admin view. */
 export function Btn({ children, variant = 'primary', size = 'md', onClick, disabled, className = '' }: {
   children: React.ReactNode; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   size?: 'sm' | 'md' | 'lg'; onClick?: () => void; disabled?: boolean; className?: string
@@ -58,6 +71,7 @@ export function Btn({ children, variant = 'primary', size = 'md', onClick, disab
   )
 }
 
+/** Dashboard stat card showing an icon, headline value and optional trend. */
 function KpiCard({ icon: Icon, label, value, sub, trend, color = 'blue' }: {
   icon: React.ElementType; label: string; value: string; sub?: string; trend?: string; color?: string
 }) {
@@ -88,6 +102,7 @@ function KpiCard({ icon: Icon, label, value, sub, trend, color = 'blue' }: {
 
 // ── SIDEBAR ────────────────────────────────────────────────────────────────────
 
+/** Sidebar navigation model — one entry per AdminSection. */
 const navItems: { id: AdminSection; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'users', label: 'Passengers', icon: Users },
@@ -104,6 +119,10 @@ const navItems: { id: AdminSection; label: string; icon: React.ElementType }[] =
   { id: 'trip-monitoring', label: 'Trip Monitor', icon: Activity },
 ]
 
+/**
+ * Collapsible left navigation. `open`/`setOpen` control the mobile drawer;
+ * `onLogout` is wired to the authService-backed logout in AdminApp.
+ */
 function Sidebar({ active, setActive, open, setOpen, onLogout }: {
   active: AdminSection; setActive: (s: AdminSection) => void; open: boolean; setOpen: (v: boolean) => void; onLogout: () => void
 }) {
@@ -173,6 +192,7 @@ function Sidebar({ active, setActive, open, setOpen, onLogout }: {
 
 // ── TOPBAR ────────────────────────────────────────────────────────────────────
 
+/** Sticky header showing the current section title and the mobile menu toggle. */
 function Topbar({ section, sidebarOpen, setSidebarOpen }: { section: AdminSection; sidebarOpen: boolean; setSidebarOpen: (v: boolean) => void }) {
   const label = navItems.find(n => n.id === section)?.label || 'Dashboard'
   return (
@@ -204,6 +224,7 @@ function Topbar({ section, sidebarOpen, setSidebarOpen }: { section: AdminSectio
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 
+/** Overview screen: KPI summary (ridership, revenue, cards) plus recent transactions. */
 function DashboardView() {
   const [summary, setSummary] = useState<ReportSummary | null>(null)
   const [recentTx, setRecentTx] = useState<Transaction[]>([])
@@ -302,6 +323,10 @@ function DashboardView() {
 
 // ── PASSENGERS (formerly Users) ────────────────────────────────────────────────
 
+/**
+ * Passenger account management: list, search, filter, activate/deactivate and
+ * manual wallet crediting (resolves the passenger's card, then tops it up).
+ */
 function PassengersView() {
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -317,6 +342,7 @@ function PassengersView() {
     loadUsers()
   }, [])
 
+  /** Fetches the passenger list and mirrors server errors to the UI. */
   const loadUsers = async () => {
     setLoading(true)
     setError('')
@@ -330,6 +356,7 @@ function PassengersView() {
     }
   }
 
+  /** Activates or deactivates a passenger account, then refreshes the list. */
   const handleToggleStatus = async (userId: number, isActive: boolean) => {
     try {
       if (isActive) {
@@ -343,6 +370,7 @@ function PassengersView() {
     }
   }
 
+  /** Credits a passenger's wallet manually; amount comes from the credit dialog. */
   const handleAddCredit = async () => {
     if (!addCreditUser || !creditAmount) return
     setCreditLoading(true)
@@ -508,6 +536,11 @@ function PassengersView() {
 
 // ── DRIVERS ───────────────────────────────────────────────────────────────────
 
+/**
+ * Driver account management: list, search, activate/deactivate, and password
+ * resets. Driver creation itself is handled by the DriverModal opened via
+ * `onAddDriver` (submit handled in AdminApp).
+ */
 function DriversView({ onAddDriver }: { onAddDriver: () => void }) {
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [loading, setLoading] = useState(true)
@@ -518,6 +551,7 @@ function DriversView({ onAddDriver }: { onAddDriver: () => void }) {
     loadDrivers()
   }, [])
 
+  /** Fetches the driver list and mirrors server errors to the UI. */
   const loadDrivers = async () => {
     setLoading(true)
     setError('')
@@ -531,6 +565,7 @@ function DriversView({ onAddDriver }: { onAddDriver: () => void }) {
     }
   }
 
+  /** Activates or deactivates a driver account, then refreshes the list. */
   const handleToggleStatus = async (driverId: number, isActive: boolean) => {
     try {
       if (isActive) {
@@ -544,6 +579,7 @@ function DriversView({ onAddDriver }: { onAddDriver: () => void }) {
     }
   }
 
+  /** Prompts for and applies a new password for a driver account. */
   const handleResetPassword = async (driver: Driver) => {
     const newPassword = prompt(`Enter a new password for ${driver.firstName} ${driver.lastName} (${driver.username}):\n\nMinimum 8 characters.`)
     if (newPassword === null) return // User cancelled
@@ -643,6 +679,10 @@ function DriversView({ onAddDriver }: { onAddDriver: () => void }) {
 
 // ── TERMINALS & STATIONS ──────────────────────────────────────────────────────
 
+/**
+ * Terminal list (presentation only — data is loaded by AdminApp and passed
+ * in via props so the fare-rule modal can share the same terminal state).
+ */
 function TerminalsView({ onAddTerminal, terminals, onEdit, onDelete }: {
   onAddTerminal: () => void; terminals: Terminal[]; onEdit: (terminal: Terminal) => void; onDelete: (terminalId: number) => void
 }) {
@@ -693,6 +733,10 @@ function TerminalsView({ onAddTerminal, terminals, onEdit, onDelete }: {
 
 // ── FARE MATRIX ───────────────────────────────────────────────────────────────
 
+/**
+ * Origin→destination fare table management. Loads fare rules itself; add/
+ * edit/delete are delegated to AdminApp via props (modals live there).
+ */
 function FareMatrixView({ onAddFareRule, onEditFareRule, onDeleteFareRule }: {
   onAddFareRule: () => void; onEditFareRule: (fare: FareRule) => void; onDeleteFareRule: (fareId: number) => void
 }) {
@@ -704,6 +748,7 @@ function FareMatrixView({ onAddFareRule, onEditFareRule, onDeleteFareRule }: {
     loadFares()
   }, [])
 
+  /** Fetches all fare rules (origin/destination pairs with amounts). */
   const loadFares = async () => {
     setLoading(true)
     setError('')
@@ -774,6 +819,7 @@ function FareMatrixView({ onAddFareRule, onEditFareRule, onDeleteFareRule }: {
 
 // ── TRANSACTIONS ──────────────────────────────────────────────────────────────
 
+/** Searchable list of all fare transactions across the system (read-only). */
 function TransactionsView() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -785,6 +831,7 @@ function TransactionsView() {
     loadTransactions()
   }, [])
 
+  /** Fetches the first page of system-wide transactions for the ledger table. */
   const loadTransactions = async () => {
     setLoading(true)
     setError('')
@@ -876,6 +923,7 @@ function TransactionsView() {
 
 // ── REPORTS ───────────────────────────────────────────────────────────────────
 
+/** Aggregated ridership/revenue report view driven by a date range. */
 function ReportsView() {
   const [summary, setSummary] = useState<ReportSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -962,6 +1010,7 @@ function ReportsView() {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 
+/** Placeholder settings screen (no functional controls yet). */
 function SettingsView() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl">
@@ -989,6 +1038,13 @@ function SettingsView() {
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 
+/**
+ * Root admin component. Owns the login gate (token restore + login/logout,
+ * with the token validated on startup so stale tokens can't skip auth), the
+ * shared terminal/driver/fare data consumed by the section views and modals,
+ * and every mutation handler with toast feedback. Once authenticated it
+ * renders the active section on top of the sidebar/topbar shell.
+ */
 export default function AdminApp() {
   const [section, setSection] = useState<AdminSection>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -1028,6 +1084,7 @@ export default function AdminApp() {
   // Toast notifications
   const { toasts, removeToast, success, error: showError } = useToast()
 
+  /** Submits admin credentials; on success the app switches to the main layout. */
   const handleLogin = async () => {
     setLoginLoading(true)
     setLoginError('')
@@ -1041,6 +1098,7 @@ export default function AdminApp() {
     }
   }
 
+  /** Clears the stored session and returns to the login screen. */
   const handleLogout = () => {
     authService.logout().then(() => setIsAuthenticated(false))
   }
@@ -1053,6 +1111,7 @@ export default function AdminApp() {
     loadFares()
   }, [isAuthenticated])
 
+  /** Loads terminals into shared state (also consumed by the fare-rule modal). */
   const loadTerminals = async () => {
     try {
       const data = await adminService.getTerminals()
@@ -1062,6 +1121,7 @@ export default function AdminApp() {
     }
   }
 
+  /** Refresh hook for driver data; the DriversView loads its own list too. */
   const loadDrivers = async () => {
     try {
       await adminService.getDrivers()
@@ -1070,6 +1130,7 @@ export default function AdminApp() {
     }
   }
 
+  /** Refresh hook for fare-rule data; the FareMatrixView loads its own list too. */
   const loadFares = async () => {
     try {
       await adminService.getFareRules()
@@ -1080,6 +1141,7 @@ export default function AdminApp() {
 
   // ── Handlers: Terminals ─────────────────────────────────────────────────
 
+  /** Creates a terminal via the TerminalModal, then refreshes shared terminal state. */
   const handleAddTerminal = async (data: { terminalName: string }) => {
     setTerminalLoading(true)
     try {
@@ -1094,6 +1156,7 @@ export default function AdminApp() {
     }
   }
 
+  /** Renames the terminal currently being edited (`editingTerminal`). */
   const handleEditTerminal = async (data: { terminalName: string }) => {
     if (!editingTerminal) return
     setTerminalLoading(true)
@@ -1110,6 +1173,11 @@ export default function AdminApp() {
     }
   }
 
+  /**
+   * Two-phase delete: the first call asks the backend whether the terminal
+   * is referenced by fare rules. If so, a warning response is returned and
+   * the delete must be re-issued with explicit user confirmation.
+   */
   const handleDeleteTerminal = async (terminalId: number) => {
     try {
       // First call to check if terminal is used in fare rules
@@ -1139,6 +1207,11 @@ export default function AdminApp() {
 
   // ── Handlers: Drivers ───────────────────────────────────────────────────
 
+  /**
+   * Creates a driver account from the DriverModal. Note: only identity
+   * fields are sent — the backend generates the Driver ID which doubles as
+   * the driver's initial password.
+   */
   const handleAddDriver = async (data: {
     firstName: string
     lastName: string
@@ -1167,6 +1240,7 @@ export default function AdminApp() {
 
   // ── Handlers: Fare Rules ────────────────────────────────────────────────
 
+  /** Creates an origin→destination fare rule via the FareRuleModal. */
   const handleAddFareRule = async (data: {
     originTerminalId: number
     destinationTerminalId: number
@@ -1186,6 +1260,7 @@ export default function AdminApp() {
     }
   }
 
+  /** Updates the fare rule currently being edited (`editingFareRule`). */
   const handleEditFareRule = async (data: {
     originTerminalId: number
     destinationTerminalId: number
@@ -1207,6 +1282,7 @@ export default function AdminApp() {
     }
   }
 
+  /** Deletes a fare rule after a browser confirm dialog. */
   const handleDeleteFareRule = async (fareId: number) => {
     if (!confirm('Are you sure you want to delete this fare rule?')) return
     try {

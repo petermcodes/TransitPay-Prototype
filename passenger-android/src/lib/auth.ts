@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { api } from './api';
 
+/** Authenticated passenger profile as returned by the auth endpoints. */
 export interface User {
   userId: number;
   firstName: string;
@@ -10,12 +11,14 @@ export interface User {
   roleName?: string;
 }
 
+/** Successful login/refresh payload containing both tokens plus the user. */
 export interface LoginResponse {
   token: string;
   refreshToken: string;
   user: User;
 }
 
+/** Payload for creating a new passenger account. */
 export interface RegisterRequest {
   username: string;
   firstName: string;
@@ -24,11 +27,13 @@ export interface RegisterRequest {
   password: string;
 }
 
+/** Payload for the username/password login endpoint. */
 export interface LoginRequest {
   username: string;
   password: string;
 }
 
+/** Payload for exchanging a refresh token for a new token pair. */
 export interface RefreshTokenRequest {
   userId: number;
   refreshToken: string;
@@ -52,7 +57,15 @@ function secureRemove(key: string): void {
   localStorage.removeItem(key);
 }
 
+/**
+ * Authentication/session service for the passenger app.
+ *
+ * Handles registration, login, token refresh and logout against the backend,
+ * persisting the token pair and user profile in storage (localStorage today;
+ * see the TODO above about secure storage for production).
+ */
 export const authService = {
+  /** Creates a new passenger account. Does not start a session. */
   async register(data: RegisterRequest) {
     return api.post<{ success: boolean; message: string; data: { userId: number; role: string } }>(
       '/api/auth/register',
@@ -60,6 +73,7 @@ export const authService = {
     );
   },
 
+  /** Logs in and persists the token pair and user profile to storage. */
   async login(data: LoginRequest): Promise<LoginResponse> {
     const response = await api.post<{ success: boolean; data: LoginResponse }>(
       '/api/auth/login',
@@ -73,6 +87,7 @@ export const authService = {
     return response.data;
   },
 
+  /** Exchanges a refresh token for a new token pair and persists it. */
   async refreshToken(userId: number, refreshToken: string): Promise<LoginResponse> {
     const response = await api.post<{ success: boolean; data: LoginResponse }>(
       '/api/auth/refresh',
@@ -85,6 +100,10 @@ export const authService = {
     return response.data;
   },
 
+  /**
+   * Logs out: best-effort server-side token revocation, then clears all
+   * locally stored session data (token, refresh token, user).
+   */
   async logout(): Promise<void> {
     const user = await this.getUser();
     const token = await this.getToken();
@@ -100,14 +119,17 @@ export const authService = {
     await secureRemove(USER_KEY);
   },
 
+  /** Returns the stored access token, or null when logged out. */
   async getToken(): Promise<string | null> {
     return await secureGet(TOKEN_KEY);
   },
 
+  /** Returns the stored refresh token, or null when logged out. */
   async getRefreshToken(): Promise<string | null> {
     return await secureGet(REFRESH_TOKEN_KEY);
   },
 
+  /** Returns the persisted user profile, or null if absent/corrupt. */
   async getUser(): Promise<User | null> {
     const userStr = await secureGet(USER_KEY);
     if (userStr) {
@@ -120,6 +142,7 @@ export const authService = {
     return null;
   },
 
+  /** True when an access token is present (does not validate it server-side). */
   async isAuthenticated(): Promise<boolean> {
     const token = await this.getToken();
     return token !== null && token.length > 0;

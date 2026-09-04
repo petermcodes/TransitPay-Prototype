@@ -12,6 +12,7 @@ namespace TransitPay.API.Models;
 [Table("passenger_discounts")]
 public class PassengerDiscount
 {
+    /// <summary>Primary key.</summary>
     [Key]
     [Column("passenger_discount_id")]
     public int PassengerDiscountId { get; set; }
@@ -64,18 +65,27 @@ public class PassengerDiscount
     [Column("expires_at")]
     public DateTime? ExpiresAt { get; set; }
 
+    /// <summary>When the passenger discount was created (UTC).</summary>
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>When the passenger discount was last updated.</summary>
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>Soft-delete timestamp. Null while the record is live.</summary>
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 
     // Navigation properties
+
+    /// <summary>Navigation property to the discounted card.</summary>
     public Card? Card { get; set; }
+
+    /// <summary>Navigation property to the discount program the discount belongs to.</summary>
     public DiscountProgram? DiscountProgram { get; set; }
+
+    /// <summary>Navigation property to the admin who approved the discount.</summary>
     public User? ApprovedByUser { get; set; }
 }
 

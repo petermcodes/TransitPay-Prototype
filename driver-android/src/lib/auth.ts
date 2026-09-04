@@ -1,5 +1,14 @@
+/**
+ * Authentication service for the driver app.
+ *
+ * Wraps the `/api/auth/*` endpoints (login, refresh, logout) and persists
+ * the JWT access token, refresh token and cached user profile in
+ * localStorage through the secure* helpers below. Storage keys are
+ * driver-specific so the driver app never collides with passenger storage.
+ */
 import { api } from './api';
 
+/** Authenticated driver profile as returned by the API. */
 export interface User {
   userId: number;
   firstName: string;
@@ -9,12 +18,14 @@ export interface User {
   roleName?: string;
 }
 
+/** Successful login/refresh payload: the token pair plus the user profile. */
 export interface LoginResponse {
   token: string;
   refreshToken: string;
   user: User;
 }
 
+/** Credentials accepted by the login endpoint (drivers log in with a username). */
 export interface LoginRequest {
   username: string;
   password: string;
@@ -39,6 +50,10 @@ function secureRemove(key: string): void {
 }
 
 export const authService = {
+  /**
+   * Authenticates a driver and persists the returned token pair plus the
+   * user profile. Returns the full login payload on success.
+   */
   async login(data: LoginRequest): Promise<LoginResponse> {
     const response = await api.post<{ success: boolean; data: LoginResponse }>(
       '/api/auth/login',
@@ -52,6 +67,10 @@ export const authService = {
     return response.data;
   },
 
+  /**
+   * Exchanges a refresh token for a new token pair and persists it.
+   * Called by the API client's automatic 401-recovery path.
+   */
   async refreshToken(userId: number, refreshToken: string): Promise<LoginResponse> {
     const response = await api.post<{ success: boolean; data: LoginResponse }>(
       '/api/auth/refresh',
@@ -64,6 +83,10 @@ export const authService = {
     return response.data;
   },
 
+  /**
+   * Revokes the server-side session (best effort) and clears all locally
+   * stored auth state, even if the server call fails.
+   */
   async logout(): Promise<void> {
     const user = await this.getUser();
     const token = await this.getToken();
@@ -79,14 +102,17 @@ export const authService = {
     await secureRemove(USER_KEY);
   },
 
+  /** Returns the persisted JWT access token, or null when logged out. */
   async getToken(): Promise<string | null> {
     return await secureGet(TOKEN_KEY);
   },
 
+  /** Returns the persisted refresh token, or null when logged out. */
   async getRefreshToken(): Promise<string | null> {
     return await secureGet(REFRESH_TOKEN_KEY);
   },
 
+  /** Returns the cached user profile, or null when absent or unparseable. */
   async getUser(): Promise<User | null> {
     const userStr = await secureGet(USER_KEY);
     if (userStr) {
@@ -99,6 +125,7 @@ export const authService = {
     return null;
   },
 
+  /** True when an access token is present locally (no server-side validation). */
   async isAuthenticated(): Promise<boolean> {
     const token = await this.getToken();
     return token !== null && token.length > 0;

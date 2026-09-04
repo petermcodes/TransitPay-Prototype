@@ -8,17 +8,29 @@ using TransitPay.API.Utilities;
 
 namespace TransitPay.API.Controllers;
 
+/// <summary>
+/// Authentication endpoints: register, login, token refresh, logout, and token validation.
+/// Auth endpoints are rate-limited per client IP and always return generic error messages
+/// on failed logins to prevent account enumeration.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
 
+    /// <summary>
+    /// Creates a new AuthController.
+    /// </summary>
     public AuthController(IAuthService authService)
     {
         _authService = authService;
     }
 
+    /// <summary>
+    /// Registers a new Passenger account. A transit card, wallet, and QR code are
+    /// provisioned automatically for the new account.
+    /// </summary>
     [HttpPost("register")]
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<RegisterResponse>> Register([FromBody] RegisterRequest request)
@@ -36,6 +48,10 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Logs a user in by username, mobile number, or Driver ID. Returns JWT + refresh
+    /// tokens on success. Failed attempts return a generic message (enumeration-safe).
+    /// </summary>
     [HttpPost("login")]
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
@@ -53,6 +69,9 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Rotates a refresh token and issues a fresh JWT access token.
+    /// </summary>
     [HttpPost("refresh")]
     [EnableRateLimiting("auth")]
     public async Task<ActionResult<RefreshTokenResponse>> Refresh([FromBody] RefreshTokenRequest request)
@@ -94,6 +113,10 @@ public class AuthController : ControllerBase
         return Ok(new { success = true, message = "Logout successful." });
     }
 
+    /// <summary>
+    /// Validates the caller's JWT and returns the authenticated user's profile.
+    /// Used by the mobile apps on startup to restore the session.
+    /// </summary>
     [HttpGet("validate")]
     [Authorize]
     [EnableRateLimiting("auth")]
@@ -127,45 +150,63 @@ public class AuthController : ControllerBase
     }
 }
 
+/// <summary>
+/// Request DTO for passenger registration.
+/// </summary>
 public class RegisterRequest
 {
+    /// <summary>The desired login username (letters, numbers, underscores, hyphens).</summary>
     [Required(ErrorMessage = "Username is required.")]
     [StringLength(50, MinimumLength = 3, ErrorMessage = "Username must be between 3 and 50 characters.")]
     [RegularExpression(@"^[a-zA-Z0-9_-]+$", ErrorMessage = "Username can only contain letters, numbers, underscores, and hyphens.")]
     public string Username { get; set; } = string.Empty;
 
+    /// <summary>The passenger's first name.</summary>
     [Required(ErrorMessage = "First name is required.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "First name must be between 2 and 50 characters.")]
     public string FirstName { get; set; } = string.Empty;
 
+    /// <summary>The passenger's last name.</summary>
     [Required(ErrorMessage = "Last name is required.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "Last name must be between 2 and 50 characters.")]
     public string LastName { get; set; } = string.Empty;
 
+    /// <summary>The passenger's Philippine mobile number (e.g., 09171234567).</summary>
     [Required(ErrorMessage = "Mobile number is required.")]
     [RegularExpression(@"^09\d{9}$", ErrorMessage = "Mobile number must be a valid Philippine number (e.g., 09171234567).")]
     public string MobileNumber { get; set; } = string.Empty;
 
+    /// <summary>The initial password, validated against the TransitPay password policy.</summary>
     [Required(ErrorMessage = "Password is required.")]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters.")]
     public string Password { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Request DTO for login. The username field also accepts a mobile number or Driver ID.
+/// </summary>
 public class LoginRequest
 {
+    /// <summary>The username, mobile number, or Driver ID.</summary>
     [Required(ErrorMessage = "Username is required.")]
     [StringLength(50, MinimumLength = 1, ErrorMessage = "Username is required.")]
     public string Username { get; set; } = string.Empty;
 
+    /// <summary>The plaintext password to verify.</summary>
     [Required(ErrorMessage = "Password is required.")]
     public string Password { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Request DTO for rotating a refresh token.
+/// </summary>
 public class RefreshTokenRequest
 {
+    /// <summary>The authenticated user's ID (ownership scope for the token).</summary>
     [Required(ErrorMessage = "User ID is required.")]
     public int UserId { get; set; }
 
+    /// <summary>The current refresh token to rotate.</summary>
     [Required(ErrorMessage = "Refresh token is required.")]
     public string RefreshToken { get; set; } = string.Empty;
 }

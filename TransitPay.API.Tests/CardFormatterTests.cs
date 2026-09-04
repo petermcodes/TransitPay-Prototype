@@ -3,6 +3,9 @@ using Xunit;
 
 namespace TransitPay.API.Tests;
 
+/// <summary>
+/// Unit tests for <see cref="TransitPay.API.Utilities.CardFormatter"/> masking behaviour.
+/// </summary>
 public class CardFormatterTests
 {
     [Fact]

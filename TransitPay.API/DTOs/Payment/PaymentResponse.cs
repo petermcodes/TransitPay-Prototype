@@ -6,8 +6,13 @@ namespace TransitPay.API.DTOs.Payment;
 /// </summary>
 public class PaymentResponse
 {
+    /// <summary>Whether the payment operation succeeded.</summary>
     public bool Success { get; set; }
+
+    /// <summary>A human-readable result message.</summary>
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>The payment receipt, or null when the operation failed.</summary>
     public PaymentData? Data { get; set; }
 }
 
@@ -16,6 +21,7 @@ public class PaymentResponse
 /// </summary>
 public class PaymentData
 {
+    /// <summary>The paying card's unique ID.</summary>
     public int CardId { get; set; }
 
     /// <summary>
@@ -28,9 +34,16 @@ public class PaymentData
     /// </summary>
     public string? MaskedCardNumber { get; set; }
 
+    /// <summary>The boarding terminal ID.</summary>
     public int OriginTerminalId { get; set; }
+
+    /// <summary>The alighting terminal ID.</summary>
     public int DestinationTerminalId { get; set; }
+
+    /// <summary>The boarding terminal's display name.</summary>
     public string? OriginTerminalName { get; set; }
+
+    /// <summary>The alighting terminal's display name.</summary>
     public string? DestinationTerminalName { get; set; }
 
     /// <summary>

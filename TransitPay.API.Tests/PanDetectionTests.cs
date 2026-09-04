@@ -10,6 +10,10 @@ using Xunit;
 
 namespace TransitPay.API.Tests
 {
+    /// <summary>
+    /// Regression guards that panic-scan serialized DTOs and API responses to ensure no
+    /// full card number (PAN) patterns leak through any endpoint.
+    /// </summary>
     public class PanDetectionTests
     {
         private static readonly Regex PanRegex = new(@"\b\d{12,19}\b", RegexOptions.Compiled);

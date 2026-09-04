@@ -12,10 +12,12 @@ namespace TransitPay.API.Models;
 [Table("qr_codes")]
 public class QRCode
 {
+    /// <summary>Primary key.</summary>
     [Key]
     [Column("qr_code_id")]
     public int QRCodeId { get; set; }
 
+    /// <summary>The transit card this QR code is bound to.</summary>
     [ForeignKey(nameof(Card))]
     [Column("card_id")]
     public int CardId { get; set; }
@@ -34,6 +36,7 @@ public class QRCode
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 
+    /// <summary>When the QR code was created (UTC).</summary>
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -44,8 +47,10 @@ public class QRCode
     [Column("revoked_at")]
     public DateTime? RevokedAt { get; set; }
 
+    /// <summary>When the QR code record was last updated.</summary>
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>Navigation property to the bound card.</summary>
     public Card? Card { get; set; }
 }

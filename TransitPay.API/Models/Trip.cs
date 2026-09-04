@@ -12,6 +12,7 @@ namespace TransitPay.API.Models;
 [Table("trips")]
 public class Trip
 {
+    /// <summary>Primary key.</summary>
     [Key]
     [Column("trip_id")]
     public int TripId { get; set; }
@@ -70,6 +71,7 @@ public class Trip
     [Column("route_name")]
     public string RouteName { get; set; } = string.Empty;
 
+    /// <summary>The current trip lifecycle status (Pending, Active, Completed, Cancelled).</summary>
     [Column("trip_status")]
     public TripStatus TripStatus { get; set; } = TripStatus.Pending;
 
@@ -99,19 +101,31 @@ public class Trip
     [Column("total_revenue")]
     public decimal TotalRevenue { get; set; }
 
+    /// <summary>When the trip record was created (UTC).</summary>
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>When the trip record was last updated.</summary>
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>EF Core optimistic concurrency token.</summary>
     [ConcurrencyCheck]
     [Column("row_version")]
     public byte[]? RowVersion { get; set; }
 
+    /// <summary>Navigation property to the driver operating the trip.</summary>
     public User? Driver { get; set; }
+
+    /// <summary>Navigation property to the trip's origin terminal.</summary>
     public Terminal? OriginTerminal { get; set; }
+
+    /// <summary>Navigation property to the trip's final destination terminal.</summary>
     public Terminal? FinalDestinationTerminal { get; set; }
+
+    /// <summary>Navigation property to the current boarding origin terminal.</summary>
     public Terminal? CurrentBoardingOriginTerminal { get; set; }
+
+    /// <summary>Navigation property to the payments collected on this trip.</summary>
     public ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
 }
