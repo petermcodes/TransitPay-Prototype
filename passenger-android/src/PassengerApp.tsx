@@ -895,6 +895,7 @@ function TopUpScreen({ go, cardId, onGcashSession }: {
   const [error, setError] = useState('')
   const [amount, setAmount] = useState('')
   const [paying, setPaying] = useState(false)
+  const [activeSession, setActiveSession] = useState<GcashTopUpSession | null>(null)
 
   useEffect(() => {
     if (cardId === null) {
@@ -911,6 +912,12 @@ function TopUpScreen({ go, cardId, onGcashSession }: {
         setError(err instanceof Error ? err.message : 'Failed to load wallet')
       } finally {
         setLoading(false)
+      }
+      // Resume: surface any checkout session left open by a crash or app close mid-payment
+      try {
+        setActiveSession(await gcashService.getActiveSession(cardId))
+      } catch {
+        setActiveSession(null)
       }
     }
     load()
@@ -934,6 +941,26 @@ function TopUpScreen({ go, cardId, onGcashSession }: {
     }
   }
 
+  /** Resumes the interrupted checkout: opens the simulated GCash screen for the existing session. */
+  const handleResumePending = () => {
+    if (activeSession) onGcashSession(activeSession)
+  }
+
+  /** Voids the interrupted checkout so a fresh top-up can be started cleanly. */
+  const handleDiscardPending = async () => {
+    if (!activeSession) return
+    try {
+      await gcashService.cancel(activeSession.sessionId)
+    } catch {
+      // Session may already be terminal — clear the banner regardless
+    }
+    setActiveSession(null)
+  }
+
+  const minutesLeft = activeSession
+    ? Math.max(0, Math.round((new Date(activeSession.expiresAt).getTime() - Date.now()) / 60000))
+    : null
+
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF] overflow-y-auto mobile-scroll">
       <div className="bg-blue-gradient px-5 pt-10 pb-14">
@@ -956,6 +983,30 @@ function TopUpScreen({ go, cardId, onGcashSession }: {
             </p>
           </div>
         </div>
+
+        {/* Resume an interrupted payment (app closed/crashed mid-checkout) */}
+        {activeSession && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#007DFB] flex items-center justify-center shrink-0">
+                <span className="text-white font-poppins font-bold">G</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-slate-800">Unfinished payment</p>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  A GCash top-up of ₱{activeSession.amount.toFixed(2)} is still pending.
+                  {minutesLeft !== null && (minutesLeft > 0 ? ` Expires in ~${minutesLeft} min.` : ' Expiring soon.')}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Btn variant="primary" size="sm" className="flex-1" onClick={handleResumePending}>
+                <Zap size={14} /> Continue payment
+              </Btn>
+              <Btn variant="ghost" size="sm" onClick={handleDiscardPending}>Cancel it</Btn>
+            </div>
+          </div>
+        )}
 
         {/* Amount picker */}
         <div>

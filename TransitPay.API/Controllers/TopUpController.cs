@@ -66,6 +66,36 @@ public class TopUpController : ControllerBase
     }
 
     /// <summary>
+    /// Returns the passenger's open GCash checkout session for a card (if any) so an
+    /// interrupted payment can be resumed after the app was closed or crashed.
+    /// Returns null data when there is nothing to resume.
+    /// </summary>
+    [HttpGet("active/{cardId}")]
+    public async Task<IActionResult> GetActiveSession(int cardId)
+    {
+        var userId = User.GetAuthenticatedUserId();
+        if (userId == null)
+        {
+            return Unauthorized(new { success = false, message = "User not authenticated." });
+        }
+
+        try
+        {
+            var session = await _gcashTopUpService.GetActiveSessionAsync(cardId, userId.Value);
+            return Ok(new { success = true, message = "Active session retrieved.", data = session });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving active GCash top-up session for card {CardId}", cardId);
+            return StatusCode(500, new { success = false, message = "Error retrieving payment session." });
+        }
+    }
+
+    /// <summary>
     /// Confirms the simulated GCash payment with the checkout OTP. Wrong OTPs allow
     /// retries (3 attempts max); a correct OTP credits the wallet atomically and
     /// completes the transaction.

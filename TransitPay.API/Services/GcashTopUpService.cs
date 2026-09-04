@@ -85,6 +85,10 @@ public class GcashTopUpService : IGcashTopUpService
         // Lazily expire stale pending sessions for this card before opening a new one
         await ExpireStaleSessionsAsync(cardId);
 
+        // Single-active-session invariant: the user started a fresh top-up instead of
+        // resuming, so void any still-open checkout for this card (transaction → CANCELLED)
+        await CancelOpenSessionsAsync(cardId);
+
         var now = DateTime.UtcNow;
         var tnr = await _trnGenerator.GenerateNextAsync();
 
@@ -303,6 +307,34 @@ public class GcashTopUpService : IGcashTopUpService
         return ToSessionResult(session);
     }
 
+    /// <inheritdoc />
+    public async Task<GcashTopUpSessionResult?> GetActiveSessionAsync(int cardId, int userId)
+    {
+        // Ownership validation: the card must belong to the authenticated passenger
+        var wallet = await _dbContext.Wallets
+            .Include(w => w.Card)
+            .FirstOrDefaultAsync(w => w.CardId == cardId);
+
+        if (wallet == null || wallet.Card == null)
+        {
+            throw new InvalidOperationException("Wallet not found.");
+        }
+
+        if (wallet.Card.UserId != userId)
+        {
+            throw new InvalidOperationException("Card not found.");
+        }
+
+        // Expire anything stale first, then surface the single open session (if any)
+        await ExpireStaleSessionsAsync(cardId);
+
+        var session = await _dbContext.GcashTopUpSessions
+            .Include(s => s.Transaction)
+            .FirstOrDefaultAsync(s => s.CardId == cardId && s.Status == GcashSessionStatus.PENDING);
+
+        return session == null ? null : ToSessionResult(session);
+    }
+
     /// <summary>
     /// Expires any still-PENDING sessions for the card whose window has elapsed,
     /// cancelling their linked transactions. Keeps history accurate without a
@@ -335,6 +367,40 @@ public class GcashTopUpService : IGcashTopUpService
             await _dbContext.SaveChangesAsync();
             _logger.LogInformation(
                 "Expired {Count} stale GCash top-up session(s) for card {CardId}", staleSessions.Count, cardId);
+        }
+    }
+
+    /// <summary>
+    /// Cancels any still-open PENDING sessions for the card (the user started a new
+    /// top-up instead of resuming the previous one). Keeps exactly one open checkout
+    /// session per card; voided sessions leave CANCELLED transactions in the history.
+    /// </summary>
+    private async Task CancelOpenSessionsAsync(int cardId)
+    {
+        var now = DateTime.UtcNow;
+        var openSessions = await _dbContext.GcashTopUpSessions
+            .Include(s => s.Transaction)
+            .Where(s => s.CardId == cardId && s.Status == GcashSessionStatus.PENDING)
+            .ToListAsync();
+
+        foreach (var open in openSessions)
+        {
+            open.Status = GcashSessionStatus.CANCELLED;
+            open.UpdatedAt = now;
+
+            if (open.Transaction != null)
+            {
+                open.Transaction.Status = TransactionStatus.CANCELLED;
+                open.Transaction.UpdatedAt = now;
+            }
+        }
+
+        if (openSessions.Count > 0)
+        {
+            await _dbContext.SaveChangesAsync();
+            _logger.LogInformation(
+                "Auto-cancelled {Count} open GCash top-up session(s) for card {CardId} (new payment started)",
+                openSessions.Count, cardId);
         }
     }
 

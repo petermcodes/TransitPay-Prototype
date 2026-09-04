@@ -357,4 +357,91 @@ public class GcashTopUpServiceTests
         Assert.NotNull(status);
         Assert.Equal("EXPIRED", status!.Status);
     }
+
+    [Fact]
+    public async Task GetActiveSession_ReturnsTheOpenPendingSession()
+    {
+        using var context = CreateContext();
+        var (card, _) = await SeedCardAsync(context, userId: 10);
+
+        var service = CreateService(context);
+        var created = await service.InitiateAsync(card.CardId, 100m, userId: 10);
+
+        var active = await service.GetActiveSessionAsync(card.CardId, userId: 10);
+
+        Assert.NotNull(active);
+        Assert.Equal(created.SessionId, active!.SessionId);
+        Assert.Equal("PENDING", active.Status);
+        Assert.Equal(100m, active.Amount);
+        Assert.Equal(created.TransactionReferenceNumber, active.TransactionReferenceNumber);
+    }
+
+    [Fact]
+    public async Task GetActiveSession_ReturnsNull_WhenNoSessionExists()
+    {
+        using var context = CreateContext();
+        var (card, _) = await SeedCardAsync(context, userId: 10);
+
+        var service = CreateService(context);
+        var active = await service.GetActiveSessionAsync(card.CardId, userId: 10);
+
+        Assert.Null(active);
+    }
+
+    [Fact]
+    public async Task GetActiveSession_LazilyExpiresStaleSession_AndReturnsNull()
+    {
+        using var context = CreateContext();
+        var (card, _) = await SeedCardAsync(context, userId: 10);
+
+        var service = CreateService(context);
+        await service.InitiateAsync(card.CardId, 100m, userId: 10);
+
+        // Simulate the session expiring while the app was closed
+        var sessionEntity = await context.GcashTopUpSessions.SingleAsync();
+        sessionEntity.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+        await context.SaveChangesAsync();
+
+        var active = await service.GetActiveSessionAsync(card.CardId, userId: 10);
+
+        Assert.Null(active);
+
+        var expired = await context.GcashTopUpSessions.SingleAsync();
+        Assert.Equal(GcashSessionStatus.EXPIRED, expired.Status);
+        var transaction = await context.Transactions.SingleAsync();
+        Assert.Equal(TransactionStatus.CANCELLED, transaction.Status);
+    }
+
+    [Fact]
+    public async Task GetActiveSession_RejectsCardOwnedByAnotherUser()
+    {
+        using var context = CreateContext();
+        var (card, _) = await SeedCardAsync(context, userId: 10);
+
+        var service = CreateService(context);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.GetActiveSessionAsync(card.CardId, userId: 99));
+
+        Assert.Equal("Card not found.", ex.Message);
+    }
+
+    [Fact]
+    public async Task Initiate_AutoCancelsExistingOpenSession()
+    {
+        using var context = CreateContext();
+        var (card, _) = await SeedCardAsync(context, userId: 10);
+
+        var service = CreateService(context);
+        var first = await service.InitiateAsync(card.CardId, 50m, userId: 10);
+        var second = await service.InitiateAsync(card.CardId, 75m, userId: 10);
+
+        // Starting a fresh top-up voids the abandoned checkout (single-active-session invariant)
+        var firstEntity = await context.GcashTopUpSessions.SingleAsync(s => s.SessionId == first.SessionId);
+        Assert.Equal(GcashSessionStatus.CANCELLED, firstEntity.Status);
+        var firstTransaction = await context.Transactions.SingleAsync(t => t.TransactionId == firstEntity.TransactionId);
+        Assert.Equal(TransactionStatus.CANCELLED, firstTransaction.Status);
+
+        var secondEntity = await context.GcashTopUpSessions.SingleAsync(s => s.SessionId == second.SessionId);
+        Assert.Equal(GcashSessionStatus.PENDING, secondEntity.Status);
+    }
 }

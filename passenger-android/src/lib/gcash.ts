@@ -49,6 +49,21 @@ export const gcashService = {
   },
 
   /**
+   * Fetches the passenger's open checkout session for a card, if any — used to
+   * resume an interrupted GCash payment after the app was closed or crashed
+   * mid-checkout. Returns null when there is nothing to resume.
+   */
+  async getActiveSession(cardId: number): Promise<GcashTopUpSession | null> {
+    const response = await api.get<{ success: boolean; data: GcashTopUpSession | null; message?: string }>(
+      `/api/topup/gcash/active/${cardId}`
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to check for pending payment');
+    }
+    return response.data ?? null;
+  },
+
+  /**
    * Confirms the payment with the (sandbox) OTP. Business outcomes (wrong code,
    * failed payment) are returned in the result — only transport/session errors throw.
    */
