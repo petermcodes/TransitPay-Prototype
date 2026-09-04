@@ -201,6 +201,9 @@ builder.Services.AddDbContext<TransitPayDbContext>(options =>
 builder.Services.Configure<AuthenticationSettings>(
     builder.Configuration.GetSection("Authentication"));
 
+builder.Services.Configure<PaymentSettings>(
+    builder.Configuration.GetSection("Payments"));
+
 // HttpContext accessor for auth audit logging (client IP)
 builder.Services.AddHttpContextAccessor();
 
@@ -215,6 +218,7 @@ builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<ITripPlanService, TripPlanService>();
 builder.Services.AddScoped<IDiscountService, DiscountService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IGcashTopUpService, GcashTopUpService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<ICardService, CardService>();
 builder.Services.AddScoped<FareCalculator>();

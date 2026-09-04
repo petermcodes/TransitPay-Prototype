@@ -1,0 +1,23 @@
+$kind: http-request
+name: Get GCash Top Up Status
+method: GET
+url: '{{baseUrl}}/api/topup/gcash/status/{{gcashSessionId}}'
+order: 2400
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{authToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Session status is returned", function () {
+          const json = pm.response.json();
+          pm.expect(json.success).to.be.true;
+          pm.expect(json.data).to.have.property("status");
+          pm.expect(json.data).to.have.property("expiresAt");
+      });

@@ -45,6 +45,9 @@ public class TransitPayDbContext : DbContext
     /// <summary>Financial transactions (fare payments and top-ups).</summary>
     public DbSet<Transaction> Transactions { get; set; }
 
+    /// <summary>Simulated GCash top-up checkout sessions (digital payment sandbox).</summary>
+    public DbSet<GcashTopUpSession> GcashTopUpSessions { get; set; }
+
     /// <summary>Fare matrix entries (route × vehicle × passenger type → fare).</summary>
     public DbSet<FareRule> FareRules { get; set; }
 
@@ -134,9 +137,12 @@ public class TransitPayDbContext : DbContext
         modelBuilder.Entity<FareMatrixEditHistory>().ToTable("fare_matrix_edit_history");
         modelBuilder.Entity<FareMatrixDeleteHistory>().ToTable("fare_matrix_delete_history");
 
+        modelBuilder.Entity<GcashTopUpSession>().ToTable("gcash_topup_sessions");
+
         modelBuilder.Entity<Wallet>().Property(w => w.RowVersion).IsRowVersion();
         modelBuilder.Entity<Trip>().Property(t => t.RowVersion).IsRowVersion();
         modelBuilder.Entity<Transaction>().Property(t => t.RowVersion).IsRowVersion();
+        modelBuilder.Entity<GcashTopUpSession>().Property(s => s.RowVersion).IsRowVersion();
 
         // ── Database integrity CHECK constraints ────────────────────────
         modelBuilder.Entity<Wallet>()
@@ -502,6 +508,29 @@ public class TransitPayDbContext : DbContext
         modelBuilder.Entity<Wallet>()
             .HasIndex(w => w.CardId)
             .IsUnique();
+
+        // ── GcashTopUpSession relationships & indexes ─────────────────────
+        // Restrict deletes so gateway/audit history survives card or transaction cleanup
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasOne(s => s.Card)
+            .WithMany()
+            .HasForeignKey(s => s.CardId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasOne(s => s.Transaction)
+            .WithMany()
+            .HasForeignKey(s => s.TransactionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasIndex(s => s.CardId);
+
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasIndex(s => s.UserId);
+
+        modelBuilder.Entity<GcashTopUpSession>()
+            .HasIndex(s => s.Status);
 
         // ── History table indexes ─────────────────────────────────────────
         modelBuilder.Entity<PassengerEditHistory>()

@@ -20,6 +20,7 @@ import { authService, type User as UserType } from './lib/auth'
 import { qrService } from './lib/payment'
 import { discountService, getDiscountStatusName, type DiscountType, type DiscountApplication, getCardTheme } from './lib/discount'
 import { walletService, computeWalletStats, type Wallet, type Transaction } from './lib/wallet'
+import { gcashService, type GcashTopUpSession } from './lib/gcash'
 import { resolveCardId, getMyCard, type Card } from './lib/card'
 import { api } from './lib/api'
 import { tripPlanService, type TripPlan } from './lib/tripPlan'
@@ -30,6 +31,7 @@ type Screen =
   | 'discounts' | 'apply-discount' | 'discount-status'
   | 'plan-trip' | 'trip-plan-history' | 'trip-plan-detail'
   | 'transaction-detail'
+  | 'gcash-checkout'
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
@@ -872,14 +874,27 @@ function WalletScreen({ go, cardId, onSelectTx }: { go: (s: Screen) => void; car
 
 // ── TOP UP ────────────────────────────────────────────────────────────────────
 
+/** Preset quick amounts offered on the top-up screen (peso). */
+const TOPUP_PRESETS = [50, 100, 200, 500, 1000]
+
+/** Server-side GCash sandbox limit — keep in sync with Payments:Gcash:MaxAmount in the API. */
+const GCASH_MAX_AMOUNT = 10000
+
 /**
- * Wallet top-up screen: choose or enter an amount and confirm the credit
- * to the passenger's wallet balance.
+ * Wallet top-up screen: choose or enter an amount and pay via the simulated
+ * GCash checkout. Clearly labelled as a sandbox — no real money is charged;
+ * the backend creates the checkout session and credits the wallet on confirm.
  */
-function TopUpScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number | null }) {
+function TopUpScreen({ go, cardId, onGcashSession }: {
+  go: (s: Screen) => void
+  cardId: number | null
+  onGcashSession: (session: GcashTopUpSession) => void
+}) {
   const [wallet, setWallet] = useState<Wallet | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [amount, setAmount] = useState('')
+  const [paying, setPaying] = useState(false)
 
   useEffect(() => {
     if (cardId === null) {
@@ -901,6 +916,24 @@ function TopUpScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number |
     load()
   }, [cardId])
 
+  const amountValue = parseFloat(amount)
+  const amountValid = !isNaN(amountValue) && amountValue >= 1 && amountValue <= GCASH_MAX_AMOUNT
+
+  /** Creates a GCash checkout session on the backend, then opens the simulated GCash screen. */
+  const handlePayWithGcash = async () => {
+    if (!amountValid || cardId === null || paying) return
+    setPaying(true)
+    setError('')
+    try {
+      const session = await gcashService.initiate(cardId, amountValue)
+      onGcashSession(session)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start GCash payment')
+    } finally {
+      setPaying(false)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-[#F0F4FF] overflow-y-auto mobile-scroll">
       <div className="bg-blue-gradient px-5 pt-10 pb-14">
@@ -912,39 +945,267 @@ function TopUpScreen({ go, cardId }: { go: (s: Screen) => void; cardId: number |
         </p>
       </div>
       <div className="-mt-6 bg-white rounded-t-3xl flex-1 px-5 pt-6 pb-6 flex flex-col gap-5">
-        {/* Admin credit notice */}
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 flex flex-col items-center gap-3 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center">
-            <Shield size={28} className="text-blue-600" />
-          </div>
+        {/* Sandbox notice */}
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+          <Shield size={18} className="text-amber-500 shrink-0 mt-0.5" />
           <div>
-            <p className="font-poppins font-bold text-slate-800">Admin-Managed Credits</p>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Online payment methods (GCash/Maya) are temporarily disabled for testing.
-              Please contact your administrator to add credits to your wallet.
+            <p className="text-sm font-bold text-amber-700">Simulation Mode</p>
+            <p className="text-xs text-amber-600/90 mt-0.5 leading-relaxed">
+              GCash top-ups run in a sandbox for testing. The flow mirrors the real
+              GCash checkout, but no real money will be charged.
             </p>
           </div>
         </div>
 
-        <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-2">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">How to get credits:</p>
-          <div className="flex items-start gap-2">
-            <CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-600">Contact your system administrator</p>
+        {/* Amount picker */}
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Amount</p>
+          <div className="grid grid-cols-3 gap-2">
+            {TOPUP_PRESETS.map(p => (
+              <button key={p} onClick={() => setAmount(String(p))}
+                className={`py-2.5 rounded-xl text-sm font-bold border transition-all ${amount === String(p) ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300'}`}>
+                ₱{p}
+              </button>
+            ))}
           </div>
-          <div className="flex items-start gap-2">
-            <CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-600">Provide your mobile number or card ID</p>
+          <div className="mt-2">
+            <Input type="number" placeholder="Custom amount" value={amount} onChange={v => setAmount(v)} icon={<Plus size={16} />} />
           </div>
-          <div className="flex items-start gap-2">
-            <CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-600">Admin will credit your wallet directly</p>
+          {amount !== '' && !amountValid && (
+            <p className="text-xs text-red-500 mt-1.5">Enter an amount between ₱1 and ₱{GCASH_MAX_AMOUNT.toLocaleString()}.</p>
+          )}
+        </div>
+
+        {/* Payment method */}
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Payment Method</p>
+          <div className="border-2 border-blue-600 bg-blue-50/50 rounded-2xl p-3.5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#007DFB] flex items-center justify-center shrink-0">
+              <span className="text-white font-poppins font-bold text-lg">G</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-slate-800">GCash</p>
+              <p className="text-xs text-slate-500">Simulated checkout · instant credit</p>
+            </div>
+            <CheckCircle size={18} className="text-blue-600 shrink-0" />
           </div>
         </div>
 
-        <Btn variant="secondary" size="lg" onClick={() => go('wallet')}>
-          <ArrowLeft size={16} /> Back to Wallet
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
+        <Btn variant="primary" size="lg" disabled={!amountValid || paying} onClick={handlePayWithGcash}>
+          {paying ? <RefreshCw size={16} className="animate-spin" /> : <Zap size={16} />} Pay with GCash
         </Btn>
+        <p className="text-center text-xs text-slate-400 -mt-2">
+          Credits are added to your wallet immediately after payment confirmation.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ── GCASH CHECKOUT (SIMULATED) ────────────────────────────────────────────────
+
+/**
+ * Simulated GCash checkout screen.
+ *
+ * Replicates the flow of the real GCash authentication page: enter the mobile
+ * number, receive a (sandbox) one-time code, then authorize the payment. On success
+ * the backend has already credited the wallet, and a receipt with the TRN and the
+ * simulated GCash reference is shown. A persistent SANDBOX badge keeps the
+ * simulation explicit.
+ */
+function GcashCheckoutScreen({ go, session, onDone }: {
+  go: (s: Screen) => void
+  session: GcashTopUpSession
+  onDone: () => void
+}) {
+  type Phase = 'mobile' | 'otp' | 'processing' | 'success' | 'failed'
+  const [phase, setPhase] = useState<Phase>('mobile')
+  const [mobile, setMobile] = useState('')
+  const [otp, setOtp] = useState('')
+  const [error, setError] = useState('')
+  const [newBalance, setNewBalance] = useState<number | null>(null)
+  const [gcashReference, setGcashReference] = useState<string | null>(null)
+
+  const mobileValid = /^09\d{9}$/.test(mobile)
+  const maskedMobile = mobile.length === 11 ? `${mobile.slice(0, 4)}•••${mobile.slice(7)}` : mobile
+
+  /** Backs out of an open checkout: voids the session so the pending transaction is cancelled. */
+  const cancelAndBack = async () => {
+    try {
+      await gcashService.cancel(session.sessionId)
+    } catch {
+      // Session may already be terminal — nothing else to do, just leave
+    }
+    go('topup')
+  }
+
+  /** Submits the sandbox OTP to confirm the payment and credit the wallet. */
+  const confirmPayment = async () => {
+    setError('')
+    setPhase('processing')
+    try {
+      const result = await gcashService.confirm(session.sessionId, otp)
+      if (result.success && result.sessionStatus.toLowerCase() === 'completed') {
+        setNewBalance(result.newBalance ?? null)
+        setGcashReference(result.gcashReference ?? null)
+        setPhase('success')
+      } else if (result.sessionStatus.toLowerCase() === 'failed') {
+        setError(result.message)
+        setPhase('failed')
+      } else {
+        // Wrong code with attempts remaining — let the user retry
+        setError(result.message || 'Incorrect code. Please try again.')
+        setPhase('otp')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Payment could not be confirmed.')
+      setPhase('failed')
+    }
+  }
+
+  return (
+    <div className="flex-1 flex flex-col bg-white overflow-y-auto mobile-scroll">
+      {/* GCash-style header */}
+      <div className="bg-[#007DFB] px-5 pt-10 pb-8">
+        <div className="flex items-center justify-between mb-4">
+          {phase === 'mobile' || phase === 'otp' ? (
+            <button onClick={cancelAndBack} className="text-white/80 flex items-center gap-1">
+              <X size={18} /> Cancel
+            </button>
+          ) : (
+            <span className="w-20" />
+          )}
+          <span className="text-[10px] font-bold tracking-widest bg-white/20 text-white px-2.5 py-1 rounded-full">SANDBOX</span>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center">
+            <span className="text-[#007DFB] font-poppins font-bold text-xl">G</span>
+          </div>
+          <div>
+            <p className="text-white font-poppins font-bold text-lg leading-tight">GCash</p>
+            <p className="text-white/70 text-xs">Simulation — no real money is charged</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 px-5 py-6 flex flex-col gap-4">
+        {phase === 'mobile' && (
+          <>
+            <div>
+              <p className="font-poppins font-bold text-slate-800">Pay TransitPay</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Order total: <span className="font-bold text-slate-700">₱{session.amount.toFixed(2)}</span>
+              </p>
+            </div>
+            <Input
+              label="GCash Mobile Number"
+              type="tel"
+              placeholder="09XXXXXXXXX"
+              value={mobile}
+              onChange={v => setMobile(v.replace(/\D/g, '').slice(0, 11))}
+              icon={<Phone size={16} />}
+            />
+            <p className="text-xs text-slate-400">
+              You'll receive a one-time PIN to authorize this payment. (Simulated in sandbox.)
+            </p>
+            <Btn variant="primary" size="lg" disabled={!mobileValid}
+              onClick={() => { setError(''); setPhase('otp') }}>
+              Next
+            </Btn>
+          </>
+        )}
+
+        {phase === 'otp' && (
+          <>
+            <div>
+              <p className="font-poppins font-bold text-slate-800">Enter Authentication Code</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                6-digit code sent to your GCash number{' '}
+                <span className="font-semibold text-slate-700">{maskedMobile}</span>
+              </p>
+            </div>
+            <Input
+              label="One-Time PIN"
+              type="tel"
+              placeholder="000000"
+              value={otp}
+              onChange={v => setOtp(v.replace(/\D/g, '').slice(0, 6))}
+              icon={<Lock size={16} />}
+            />
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
+              <CheckCircle size={14} className="text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700">
+                Sandbox mode: use code <span className="font-mono font-bold">123456</span> to authorize the payment.
+              </p>
+            </div>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <Btn variant="primary" size="lg" disabled={otp.length !== 6} onClick={confirmPayment}>
+              <Zap size={16} /> Pay ₱{session.amount.toFixed(2)}
+            </Btn>
+            <button onClick={() => { setOtp(''); setError(''); setPhase('mobile') }}
+              className="text-xs text-slate-400 hover:text-slate-600">
+              Wrong number? Go back
+            </button>
+          </>
+        )}
+
+        {phase === 'processing' && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 py-16">
+            <RefreshCw size={32} className="text-[#007DFB] animate-spin" />
+            <p className="font-poppins font-bold text-slate-800">Processing payment...</p>
+            <p className="text-xs text-slate-400">Authorizing ₱{session.amount.toFixed(2)} via GCash</p>
+          </div>
+        )}
+
+        {phase === 'success' && (
+          <div className="flex flex-col items-center gap-4 py-6">
+            <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
+              <CheckCircle size={36} className="text-green-500" />
+            </div>
+            <div className="text-center">
+              <p className="font-poppins font-bold text-lg text-slate-800">Payment Successful!</p>
+              <p className="text-sm text-slate-500 mt-0.5">₱{session.amount.toFixed(2)} added to your wallet</p>
+            </div>
+            <div className="w-full bg-slate-50 rounded-2xl p-4 flex flex-col gap-2.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">New Balance</span>
+                <span className="font-bold text-green-600">{newBalance != null ? `₱${newBalance.toFixed(2)}` : '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">GCash Reference</span>
+                <span className="font-mono text-slate-700">{gcashReference || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Transaction No.</span>
+                <span className="font-mono text-slate-700">{session.transactionReferenceNumber || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Payment Method</span>
+                <span className="text-slate-700">GCash (Simulated)</span>
+              </div>
+            </div>
+            <Btn variant="primary" size="lg" onClick={onDone}>
+              <WalletIcon size={16} /> Back to Wallet
+            </Btn>
+          </div>
+        )}
+
+        {phase === 'failed' && (
+          <div className="flex flex-col items-center gap-4 py-10">
+            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
+              <AlertCircle size={36} className="text-red-500" />
+            </div>
+            <div className="text-center">
+              <p className="font-poppins font-bold text-lg text-slate-800">Payment Not Completed</p>
+              <p className="text-xs text-slate-500 mt-1 px-6">
+                {error || 'The payment could not be processed. No amount was charged.'}
+              </p>
+            </div>
+            <Btn variant="secondary" size="lg" onClick={() => go('topup')}>Back to Top Up</Btn>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -2296,6 +2557,7 @@ export default function PassengerApp() {
   const [cardResolved, setCardResolved] = useState(false)
   const [selectedPlanId, setSelectedPlanId] = useState<number | undefined>()
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [gcashSession, setGcashSession] = useState<GcashTopUpSession | null>(null)
   const go = (s: Screen) => setScreen(s)
 
   const navigateToTripPlanDetail = (planId?: number) => {
@@ -2306,6 +2568,12 @@ export default function PassengerApp() {
   const navigateToTransactionDetail = (tx: Transaction) => {
     setSelectedTransaction(tx)
     go('transaction-detail')
+  }
+
+  /** Opens the simulated GCash checkout for a freshly initiated top-up session. */
+  const navigateToGcashCheckout = (session: GcashTopUpSession) => {
+    setGcashSession(session)
+    go('gcash-checkout')
   }
 
   // Resolve the authenticated user's card ID once after login/register.
@@ -2340,7 +2608,8 @@ export default function PassengerApp() {
         {screen === 'otp' && <OTPScreen go={go} />}
         {screen === 'home' && <HomeScreen go={go} cardId={cardId} onNavigateToDetail={navigateToTripPlanDetail} />}
         {screen === 'wallet' && (showCardEmptyState ? <TransitCardNotFound go={go} /> : <WalletScreen go={go} cardId={cardId} onSelectTx={navigateToTransactionDetail} />)}
-        {screen === 'topup' && (showCardEmptyState ? <TransitCardNotFound go={go} /> : <TopUpScreen go={go} cardId={cardId} />)}
+        {screen === 'topup' && (showCardEmptyState ? <TransitCardNotFound go={go} /> : <TopUpScreen go={go} cardId={cardId} onGcashSession={navigateToGcashCheckout} />)}
+        {screen === 'gcash-checkout' && gcashSession && <GcashCheckoutScreen go={go} session={gcashSession} onDone={() => go('wallet')} />}
         {screen === 'qr' && (showCardEmptyState ? <TransitCardNotFound go={go} /> : <QRScreen go={go} cardId={cardId} />)}
         {screen === 'profile' && <ProfileScreen go={go} cardId={cardId} />}
         {screen === 'discounts' && <DiscountsScreen go={go} cardId={cardId} />}
